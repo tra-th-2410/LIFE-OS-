@@ -1,6 +1,8 @@
-export function formatRelativeTime(date: string | Date, language: 'en' | 'vi' = typeof document !== 'undefined' && document.documentElement.lang === 'vi' ? 'vi' : 'en'): string {
-  const now = new Date();
+export function formatRelativeTime(date?: string | Date | null, language: 'en' | 'vi' = typeof document !== 'undefined' && document.documentElement.lang === 'vi' ? 'vi' : 'en'): string {
+  if (!date) return '';
   const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const now = new Date();
   const diff = now.getTime() - d.getTime();
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -15,8 +17,11 @@ export function formatRelativeTime(date: string | Date, language: 'en' | 'vi' = 
   return d.toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { month: 'short', day: 'numeric' });
 }
 
-export function formatDate(date: string | Date, language: 'en' | 'vi' = typeof document !== 'undefined' && document.documentElement.lang === 'vi' ? 'vi' : 'en'): string {
-  return new Date(date).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', {
+export function formatDate(date?: string | Date | null, language: 'en' | 'vi' = typeof document !== 'undefined' && document.documentElement.lang === 'vi' ? 'vi' : 'en'): string {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -62,3 +67,60 @@ export const COMMUNITY_COLORS: Record<string, string> = {
   orange: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20',
   cyan: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20',
 };
+
+export const HABIT_CATEGORIES: Record<string, { labelVi: string; labelEn: string; color: string; icon: string }> = {
+  study: { labelVi: 'Học tập', labelEn: 'Study', color: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20', icon: '📚' },
+  health: { labelVi: 'Sức khỏe & Thể chất', labelEn: 'Health & Fitness', color: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20', icon: '💪' },
+  mindfulness: { labelVi: 'Tâm trí & Cảm xúc', labelEn: 'Mindfulness', color: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20', icon: '🧘' },
+  language: { labelVi: 'Ngoại ngữ', labelEn: 'Languages', color: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20', icon: '🗣️' },
+  skill: { labelVi: 'Kỹ năng & Sáng tạo', labelEn: 'Skills & Craft', color: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20', icon: '💻' },
+  routine: { labelVi: 'Nề nếp hàng ngày', labelEn: 'Daily Routine', color: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20', icon: '🧹' },
+};
+
+export function getISODate(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function getPast7Days(): { dateStr: string; dayName: string; dayShort: string; isToday: boolean }[] {
+  const result = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = getISODate(d);
+    const dayName = d.toLocaleDateString('vi-VN', { weekday: 'short' });
+    const dayShort = d.toLocaleDateString('en-US', { weekday: 'narrow' });
+    result.push({
+      dateStr,
+      dayName,
+      dayShort,
+      isToday: i === 0,
+    });
+  }
+  return result;
+}
+
+export function calculateHabitStreak(completedDates: string[]): number {
+  if (!completedDates || completedDates.length === 0) return 0;
+  const set = new Set(completedDates);
+  let streak = 0;
+  const today = new Date();
+  const todayStr = getISODate(today);
+
+  // Check from today or yesterday
+  let checkDate = new Date();
+  if (!set.has(todayStr)) {
+    // If not completed today, check if completed yesterday to maintain streak
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  while (set.has(getISODate(checkDate))) {
+    streak++;
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  return streak;
+}
+

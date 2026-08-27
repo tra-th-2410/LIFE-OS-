@@ -119,6 +119,19 @@ export interface Goal {
   updated_at: string;
 }
 
+export type HabitCategory = 'study' | 'health' | 'mindfulness' | 'language' | 'skill' | 'routine';
+
+export interface HabitTemplate {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  category: HabitCategory;
+  default_frequency: string;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Habit {
   id: string;
   user_id: string;
@@ -126,7 +139,11 @@ export interface Habit {
   icon: string;
   frequency: string;
   streak: number;
+  category?: HabitCategory;
+  is_archived?: boolean;
+  target_days?: number;
   created_at: string;
+  updated_at?: string;
 }
 
 export interface HabitLog {
@@ -137,12 +154,72 @@ export interface HabitLog {
   created_at: string;
 }
 
+export type MoodTrend = 'improving' | 'stable' | 'declining' | 'mixed';
+
 export interface MoodEntry {
   id: string;
   user_id: string;
   mood: number;
   note: string | null;
   tags: string[];
+  created_at: string;
+}
+
+export interface MoodWeeklySummary {
+  id: string;
+  user_id: string;
+  week_start_date: string;
+  week_end_date: string;
+  avg_mood: number;
+  positive_days_count: number;
+  neutral_days_count: number;
+  difficult_days_count: number;
+  trend: MoodTrend;
+  summary_text: string;
+  encouragement: string;
+  habit_suggestions: string[];
+  created_at: string;
+}
+
+export type JournalVisibility = 'private' | 'friends' | 'public';
+
+export interface JournalPostAttachment {
+  id: string;
+  journal_id: string;
+  uploader_id: string;
+  file_name: string;
+  file_path: string;
+  file_type: string;
+  file_size: number;
+  is_image: boolean;
+  created_at: string;
+}
+
+export interface JournalPostReaction {
+  id: string;
+  journal_id: string;
+  user_id: string;
+  reaction_type: string;
+  created_at: string;
+}
+
+export interface JournalPostComment {
+  id: string;
+  journal_id: string;
+  author_id: string;
+  parent_id: string | null;
+  content: string;
+  author?: Profile | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JournalPostShare {
+  id: string;
+  journal_id: string;
+  shared_by: string;
+  shared_to_user_id: string | null;
+  caption: string | null;
   created_at: string;
 }
 
@@ -153,9 +230,34 @@ export interface JournalEntry {
   content: string;
   mood: number | null;
   is_private: boolean;
-  ai_analysis: Record<string, unknown> | null;
+  visibility?: JournalVisibility;
+  tags?: string[];
+  image_url?: string | null;
+  reactions_count?: number;
+  comments_count?: number;
+  ai_analysis?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface JournalEntryWithRelations extends JournalEntry {
+  author?: Profile | null;
+  attachments?: JournalPostAttachment[];
+  reactions?: JournalPostReaction[];
+  comments?: JournalPostComment[];
+}
+
+export type FriendshipStatus = 'pending' | 'accepted' | 'rejected' | 'blocked';
+
+export interface Friendship {
+  id: string;
+  user_id: string;
+  friend_id: string;
+  status: FriendshipStatus;
+  created_at: string;
+  updated_at: string;
+  friend_profile?: Profile | null;
+  user_profile?: Profile | null;
 }
 
 export interface Project {
@@ -402,3 +504,86 @@ export interface ForumPostReaction {
   reaction_type: string;
   created_at: string;
 }
+
+// ----------------------------------------------------
+// Quiz & Flashcard System Types
+// ----------------------------------------------------
+
+export type QuestionType = 'flashcard' | 'multiple_choice' | 'fill_blank';
+export type StudySubject = 'math' | 'physics' | 'chemistry' | 'biology' | 'english' | 'literature' | 'history' | 'geography' | 'it' | 'other';
+export type ProgressDifficulty = 'easy' | 'medium' | 'hard';
+export type ProgressStatus = 'new' | 'learning' | 'reviewing' | 'mastered';
+export type StudySessionMode = 'practice' | 'exam';
+
+export interface StudySet {
+  id: string;
+  user_id: string | null;
+  title: string;
+  subject: StudySubject | string;
+  topic: string | null;
+  description: string | null;
+  default_type?: QuestionType | string;
+  is_system?: boolean;
+  created_at: string;
+  updated_at: string;
+  questions_count?: number;
+  mastered_count?: number;
+}
+
+export interface MultipleChoiceOptions {
+  A: string;
+  B: string;
+  C: string;
+  D: string;
+}
+
+export interface StudyQuestion {
+  id: string;
+  set_id: string;
+  type: QuestionType;
+  question: string;
+  answer: string | null;
+  explanation: string | null;
+  options: MultipleChoiceOptions | null;
+  correct_option: 'A' | 'B' | 'C' | 'D' | null;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudyProgress {
+  id: string;
+  user_id: string;
+  question_id: string;
+  status: ProgressStatus;
+  difficulty: ProgressDifficulty | null;
+  next_review_at: string;
+  correct_count: number;
+  incorrect_count: number;
+  last_reviewed_at: string | null;
+}
+
+export interface StudySession {
+  id: string;
+  user_id: string;
+  set_id: string;
+  mode: StudySessionMode;
+  started_at: string;
+  completed_at: string | null;
+  duration_seconds: number;
+  total_questions: number;
+  correct_answers: number;
+  incorrect_answers: number;
+  score: number;
+  created_at: string;
+}
+
+export interface ExamAnswerRecord {
+  questionId: string;
+  userAnswer: string;
+  isCorrect: boolean;
+  isFlagged: boolean;
+  timeSpentSeconds?: number;
+}
+

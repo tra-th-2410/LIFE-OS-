@@ -272,9 +272,16 @@ export const translations = {
 export type TranslationKey = keyof typeof translations.en;
 
 export function translate(key: string, language: Language): string {
-  const direct = translations[language][key as TranslationKey];
-  if (direct) return direct;
+  if (!key || typeof key !== 'string') return '';
+  const langTable = translations[language];
+  if (!langTable) return key;
+  const direct = langTable[key as TranslationKey];
+  if (direct && typeof direct === 'string') return direct;
   const source = language === 'en' ? translations.vi : translations.en;
+  const target = language === 'en' ? translations.en : translations.vi;
   const originalKey = (Object.keys(source) as TranslationKey[]).find((candidate) => source[candidate] === key);
-  return originalKey ? translations[language][originalKey] : key;
+  if (originalKey && target[originalKey] && typeof target[originalKey] === 'string') {
+    return target[originalKey];
+  }
+  return key;
 }

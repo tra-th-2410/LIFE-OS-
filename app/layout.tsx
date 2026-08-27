@@ -16,9 +16,6 @@ export const metadata: Metadata = {
   title: 'Life OS — A Social OS for Young Learners',
   description:
     'A safe space to learn, connect, build projects, and grow. Not another social media trap.',
-};
-
-export const viewport = {
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#ffffff' },
     { media: '(prefers-color-scheme: dark)', color: '#0a1518' },

@@ -53,7 +53,12 @@ function getActionsForBot(botType: BotType): string[] {
 
 const INLINE_ACTION_BUTTONS = ['Start Quiz', 'Show Answers', 'Make Harder', 'New Questions', 'Quiz Me', 'Create Practice Questions'];
 
-function extractInlineActions(content: string): string[] {
+function escapeRegExp(s: string): string {
+  return s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+}
+
+function extractInlineActions(content?: string | null): string[] {
+  if (!content) return [];
   const actions: string[] = [];
   for (const action of INLINE_ACTION_BUTTONS) {
     if (content.includes(`[${action}]`)) actions.push(action);
@@ -61,8 +66,15 @@ function extractInlineActions(content: string): string[] {
   return actions;
 }
 
-function stripActionMarkers(content: string): string {
-  return content.replace(/\*\*\[([^\]]+)\]\*\*/g, '').replace(/\[([^\]]+)\]/g, '$1').trim();
+function stripActionMarkers(content?: string | null): string {
+  if (!content) return '';
+  let result = String(content);
+  for (const action of INLINE_ACTION_BUTTONS) {
+    const escaped = escapeRegExp(action);
+    result = result.replace(new RegExp(`\\*\\*\\[\\s*${escaped}\\s*\\]\\*\\*`, 'gi'), '');
+    result = result.replace(new RegExp(`\\[\\s*${escaped}\\s*\\]`, 'gi'), '');
+  }
+  return result.trim();
 }
 
 export default function AiChatPage() {
@@ -117,6 +129,122 @@ export default function AiChatPage() {
   }, [loadConversation]);
 
   useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // 1. Monkey-patch document.createTextNode
+    const originalCreateTextNode = document.createTextNode;
+    document.createTextNode = function (text: string) {
+      if (typeof text === 'string' && (text === 'undefined' || text.includes('undefined'))) {
+        console.error('🚨 [RUNTIME TRAP: createTextNode] Created text node with "undefined"!', {
+          text,
+          activeElement: document.activeElement,
+          time: new Date().toISOString(),
+          stack: new Error().stack,
+        });
+      }
+      return originalCreateTextNode.apply(this, arguments as unknown as [string]);
+    };
+
+    // 2. Monkey-patch Node.prototype.nodeValue setter
+    const originalNodeValueDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'nodeValue');
+    if (originalNodeValueDesc && originalNodeValueDesc.set) {
+      const origSet = originalNodeValueDesc.set;
+      Object.defineProperty(Node.prototype, 'nodeValue', {
+        set(val: string | null) {
+          if (typeof val === 'string' && (val === 'undefined' || val.includes('undefined'))) {
+            console.error('🚨 [RUNTIME TRAP: nodeValue setter] nodeValue set with "undefined"!', {
+              node: this,
+              valueBefore: this.nodeValue,
+              valueAfter: val,
+              parent: (this as Node).parentElement,
+              parentOuterHTML: (this as Node).parentElement?.outerHTML,
+              activeElement: document.activeElement,
+              time: new Date().toISOString(),
+              stack: new Error().stack,
+            });
+          }
+          return origSet.call(this, val);
+        },
+        get: originalNodeValueDesc.get,
+        configurable: true,
+      });
+    }
+
+    // 3. Monkey-patch Node.prototype.textContent setter
+    const originalTextContentDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+    if (originalTextContentDesc && originalTextContentDesc.set) {
+      const origTextSet = originalTextContentDesc.set;
+      Object.defineProperty(Node.prototype, 'textContent', {
+        set(val: string | null) {
+          if (typeof val === 'string' && (val === 'undefined' || val.includes('undefined'))) {
+            console.error('🚨 [RUNTIME TRAP: textContent setter] textContent set with "undefined"!', {
+              node: this,
+              valueBefore: this.textContent,
+              valueAfter: val,
+              parent: (this as Node).parentElement,
+              parentOuterHTML: (this as Node).parentElement?.outerHTML,
+              activeElement: document.activeElement,
+              time: new Date().toISOString(),
+              stack: new Error().stack,
+            });
+          }
+          return origTextSet.call(this, val);
+        },
+        get: originalTextContentDesc.get,
+        configurable: true,
+      });
+    }
+
+    // 4. MutationObserver on document.body for any DOM element containing "undefined"
+    const debugObserver = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type === 'characterData' && m.target.nodeValue?.includes('undefined')) {
+          console.error('🚨 [RUNTIME TRAP: characterData mutation] contains "undefined":', {
+            target: m.target,
+            parent: m.target.parentElement,
+            outerHTML: m.target.parentElement?.outerHTML,
+            value: m.target.nodeValue,
+            activeElement: document.activeElement,
+            time: new Date().toISOString(),
+          });
+        }
+        if (m.type === 'childList') {
+          m.addedNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE && node.nodeValue?.includes('undefined')) {
+              console.error('🚨 [RUNTIME TRAP: added TEXT_NODE] contains "undefined":', {
+                node,
+                parent: node.parentElement,
+                outerHTML: node.parentElement?.outerHTML,
+                value: node.nodeValue,
+                activeElement: document.activeElement,
+                time: new Date().toISOString(),
+              });
+            } else if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).textContent?.includes('undefined')) {
+              const matches = Array.from((node as HTMLElement).querySelectorAll('*')).filter(
+                (el) => el.childElementCount === 0 && el.textContent?.includes('undefined')
+              );
+              console.error('🚨 [RUNTIME TRAP: added ELEMENT_NODE] contains "undefined":', {
+                node,
+                outerHTML: (node as HTMLElement).outerHTML,
+                activeElement: document.activeElement,
+                time: new Date().toISOString(),
+                matches: matches.map((el) => ({ tag: el.tagName, class: el.className, text: el.textContent })),
+              });
+            }
+          });
+        }
+      }
+    });
+
+    debugObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+    return () => {
+      debugObserver.disconnect();
+      document.createTextNode = originalCreateTextNode;
+    };
+  }, []);
+
+  useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
@@ -142,20 +270,48 @@ export default function AiChatPage() {
         const allMessages = [...messages, { role: 'user', content: userMessage }];
         const { data: session } = await supabase.auth.getSession();
         const response = await generateAiResponse(botType, allMessages, session?.session?.access_token);
+        console.log('[AI Page] 4. response received from generateAiResponse():', response);
 
         const { data: aiMsg } = await supabase
           .from('ai_messages')
           .insert({ conversation_id: conversationId, role: 'assistant', content: response })
           .select()
           .single();
-        if (aiMsg) setMessages((prev) => [...prev, aiMsg as AiMessage]);
+        console.log('[AI Page] 5. message object inserted / before setMessages():', aiMsg);
+        if (aiMsg) {
+          setMessages((prev) => [...prev, aiMsg as AiMessage]);
+        } else {
+          // Fallback in case DB insert returns null (e.g. offline/session delay)
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `temp-${Date.now()}`,
+              conversation_id: conversationId,
+              role: 'assistant',
+              content: response,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        }
       } catch (err) {
         const vi = /[à-ỹđ]/i.test(userMessage);
         const rawMsg = err instanceof Error ? err.message : String(err);
         const isKeyMissing = rawMsg.includes('GEMINI_API_KEY') || rawMsg.includes('not configured');
-        const errorMsg = isKeyMissing
-          ? (vi ? 'Dịch vụ AI chưa được cấu hình. Vui lòng liên hệ quản trị viên để thêm Gemini API key.' : 'AI service is not configured. Please contact the administrator to add a Gemini API key.')
-          : (vi ? 'Có lỗi xảy ra khi tạo câu trả lời. Vui lòng thử lại.' : 'Something went wrong while generating the response. Please try again.');
+        const isFunctionNotFound = rawMsg.includes('Requested function was not found') || rawMsg.includes('404');
+        let errorMsg: string;
+        if (isKeyMissing) {
+          errorMsg = vi
+            ? 'Dịch vụ AI chưa được cấu hình Secret. Vui lòng thêm secret GEMINI_API_KEY trên Supabase Dashboard.'
+            : 'AI service is not configured. Please add GEMINI_API_KEY secret in Supabase Edge Function settings.';
+        } else if (isFunctionNotFound) {
+          errorMsg = vi
+            ? 'Edge Function "ai-chat" chưa được deploy trên project Supabase mới. Vui lòng deploy function này lên Supabase.'
+            : 'Edge Function "ai-chat" is not deployed on this Supabase project. Please deploy the function to Supabase.';
+        } else {
+          errorMsg = rawMsg && !rawMsg.includes('Request failed')
+            ? rawMsg
+            : (vi ? 'Có lỗi xảy ra khi tạo câu trả lời. Vui lòng thử lại.' : 'Something went wrong while generating the response. Please try again.');
+        }
         setError(errorMsg);
         setMessages((prev) => [
           ...prev,
@@ -215,7 +371,7 @@ export default function AiChatPage() {
       </div>
 
       {/* Messages */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin space-y-4 py-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto scrollbar-thin space-y-4 py-4" data-no-translate="true" translate="no">
         {loading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -240,8 +396,15 @@ export default function AiChatPage() {
           </div>
         ) : (
           messages.map((msg) => {
-            const inlineActions = msg.role === 'assistant' ? extractInlineActions(msg.content) : [];
-            const displayContent = msg.role === 'assistant' ? stripActionMarkers(msg.content) : msg.content;
+            const rawContent = msg?.content ?? '';
+            const inlineActions = msg?.role === 'assistant' ? extractInlineActions(rawContent) : [];
+            const displayContent = msg?.role === 'assistant' ? stripActionMarkers(rawContent) : rawContent;
+
+            console.log("MESSAGE CONTENT:", JSON.stringify(msg?.content));
+            console.log("ACTIONS:", JSON.stringify(inlineActions));
+            console.log("VISUALIZATION:", JSON.stringify((msg as unknown as Record<string, unknown>)?.visualization ?? null));
+            console.log("ATTACHMENTS:", JSON.stringify((msg as unknown as Record<string, unknown>)?.attachments ?? null));
+
             return (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 ${
@@ -249,11 +412,14 @@ export default function AiChatPage() {
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted'
                 }`}>
+                  {/* [MESSAGE] */}
                   {msg.role === 'assistant' ? (
                     <ChatMessageRenderer content={displayContent} />
                   ) : (
                     <p className="text-sm whitespace-pre-wrap">{displayContent}</p>
                   )}
+
+                  {/* [ACTIONS] */}
                   {inlineActions.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {inlineActions.map((action) => (
@@ -268,8 +434,9 @@ export default function AiChatPage() {
                       ))}
                     </div>
                   )}
+
                   <p className={`text-[10px] mt-1 ${msg.role === 'user' ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                    {formatRelativeTime(msg.created_at)}
+                    {msg.created_at ? formatRelativeTime(msg.created_at) : ''}
                   </p>
                 </div>
               </div>

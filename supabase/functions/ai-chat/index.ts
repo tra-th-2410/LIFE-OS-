@@ -78,16 +78,6 @@ Deno.serve(async (req: Request) => {
 
     const systemPrompt = SYSTEM_PROMPTS[botType];
 
-    const chatMessages: ChatMessage[] = [
-      { role: "system", content: systemPrompt },
-      ...messages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content,
-        })),
-    ];
-
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) {
       return new Response(
@@ -99,46 +89,159 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const geminiResponse = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${geminiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gemini-3.6-flash",
-          messages: chatMessages,
-          max_tokens: 8192,
-          temperature: 0.7,
-        }),
+    // Convert chat messages to Gemini Native format
+    const contents: { role: string; parts: { text: string }[] }[] = [];
+    for (const m of messages) {
+      if (m.role === 'system') continue;
+      contents.push({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      });
+    }
+
+    let modelsToTry = [
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-latest",
+      "gemini-1.5-pro",
+      "gemini-2.5-flash",
+    ];
+
+    try {
+      const listModelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
+      if (listModelsRes.ok) {
+        const listData = await listModelsRes.json();
+        const available = (listData?.models || [])
+          .filter((m: { supportedGenerationMethods?: string[] }) =>
+            m.supportedGenerationMethods?.includes("generateContent")
+          )
+          .map((m: { name: string }) => m.name.replace(/^models\//, ""));
+        if (available.length > 0) {
+          console.log("Dynamically discovered available Gemini models:", available);
+          modelsToTry = [...available, ...modelsToTry];
+        }
+      } else {
+        console.warn("Could not list models:", listModelsRes.status, await listModelsRes.text());
       }
+    } catch (e) {
+      console.error("List models error:", e);
+    }
+
+    let content = "";
+    let lastErrorText = "";
+    let lastStatus = 502;
+
+    const isJsonRequest = messages.some((m) =>
+      typeof m.content === 'string' && (m.content.includes('"questions"') || m.content.toLowerCase().includes('json'))
     );
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error("Gemini API error:", geminiResponse.status, errorText);
+    const effectiveSystemPrompt = isJsonRequest
+      ? `You are an expert educational content generator. You MUST respond with ONLY a single valid, raw JSON object strictly matching the requested structure. Do NOT output any reasoning, thinking process, planning notes, greetings, or explanations outside the JSON. Your response MUST begin with '{' and end with '}'.`
+      : systemPrompt;
+
+    const chatMessages: ChatMessage[] = [
+      { role: "system", content: effectiveSystemPrompt },
+      ...messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .map((m) => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })),
+    ];
+
+    const generationConfig: Record<string, unknown> = {
+      temperature: 0.7,
+      maxOutputTokens: 8192,
+    };
+    if (isJsonRequest) {
+      generationConfig.responseMimeType = "application/json";
+    }
+
+    // Strategy 1: Native Gemini API
+    for (const model of modelsToTry) {
+      try {
+        const nativeUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+        const nativeRes = await fetch(nativeUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents,
+            systemInstruction: {
+              parts: [{ text: effectiveSystemPrompt }],
+            },
+            generationConfig,
+          }),
+        });
+
+        if (nativeRes.ok) {
+          const nativeData = await nativeRes.json();
+          const partText = nativeData?.candidates?.[0]?.content?.parts
+            ?.map((p: { text?: string }) => p.text || "")
+            .join("") || "";
+          if (partText.trim()) {
+            content = partText.trim();
+            console.log(`Successfully generated content using model: ${model}`);
+            break;
+          }
+        } else {
+          lastStatus = nativeRes.status;
+          lastErrorText = await nativeRes.text();
+          console.warn(`Native Gemini (${model}) failed with ${lastStatus}: ${lastErrorText}`);
+        }
+      } catch (nativeErr) {
+        console.error(`Native fetch error with model ${model}:`, nativeErr);
+      }
+    }
+
+    // Strategy 2: OpenAI Compatible Endpoint fallback if Strategy 1 didn't produce content
+    if (!content) {
+      for (const model of modelsToTry) {
+        try {
+          const openAiRes = await fetch(
+            "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${geminiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: chatMessages,
+                max_tokens: 8192,
+                temperature: 0.7,
+              }),
+            }
+          );
+
+          if (openAiRes.ok) {
+            const data = await openAiRes.json();
+            if (typeof data?.choices?.[0]?.message?.content === "string") {
+              content = data.choices[0].message.content.trim();
+              break;
+            }
+          } else {
+            lastStatus = openAiRes.status;
+            lastErrorText = await openAiRes.text();
+          }
+        } catch (openAiErr) {
+          console.error(`OpenAI compatibility fetch error with model ${model}:`, openAiErr);
+        }
+      }
+    }
+
+    if (!content || content === "undefined" || content === "null") {
+      console.error("All Gemini strategies failed. Last status:", lastStatus, lastErrorText);
       let userMessage = "AI service request failed. Please try again.";
-      if (geminiResponse.status === 429) {
+      if (lastStatus === 429) {
         userMessage =
           "Dịch vụ AI đang quá tải hoặc đã vượt giới hạn miễn phí. Vui lòng thử lại sau ít phút.";
-      } else if (geminiResponse.status === 401 || geminiResponse.status === 403) {
+      } else if (lastStatus === 401 || lastStatus === 403) {
         userMessage =
           "API key không hợp lệ hoặc đã hết hạn. Vui lòng liên hệ quản trị viên để cập nhật Gemini API key.";
       }
       return new Response(
-        JSON.stringify({ error: userMessage }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const data = await geminiResponse.json();
-    const content = data?.choices?.[0]?.message?.content;
-
-    if (!content) {
-      return new Response(
-        JSON.stringify({ error: "AI service returned an empty response." }),
+        JSON.stringify({ error: userMessage, details: lastErrorText }),
         { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
