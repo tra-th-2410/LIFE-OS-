@@ -1045,6 +1045,58 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.check_user_daily_challenge_reminder(p_user_id uuid)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tz text := 'Asia/Ho_Chi_Minh';
+  v_today date;
+  v_titles text[];
+  v_body text;
+  v_existing integer;
+BEGIN
+  SELECT COALESCE(timezone, 'Asia/Ho_Chi_Minh') INTO v_tz
+  FROM profiles
+  WHERE id = p_user_id;
+
+  IF v_tz IS NULL OR v_tz = '' THEN
+    v_tz := 'Asia/Ho_Chi_Minh';
+  END IF;
+
+  v_today := (CURRENT_TIMESTAMP AT TIME ZONE v_tz)::date;
+
+  SELECT count(*) INTO v_existing
+  FROM notifications
+  WHERE user_id = p_user_id
+    AND type = 'daily_challenge_reminder'
+    AND (created_at AT TIME ZONE v_tz)::date = v_today;
+
+  IF v_existing > 0 THEN
+    RETURN 0;
+  END IF;
+
+  v_titles := ARRAY(SELECT get_user_challenge_reminders.title FROM get_user_challenge_reminders(p_user_id, v_today));
+
+  IF array_length(v_titles, 1) IS NULL OR array_length(v_titles, 1) = 0 THEN
+    RETURN 0;
+  END IF;
+
+  IF array_length(v_titles, 1) = 1 THEN
+    v_body := v_titles[1];
+  ELSE
+    v_body := array_to_string(v_titles, E'\n');
+  END IF;
+
+  INSERT INTO notifications (user_id, type, title, body, link)
+  VALUES (p_user_id, 'daily_challenge_reminder', 'Daily Challenge Reminder', v_body, '/app/study');
+
+  RETURN 1;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.generate_daily_challenge_reminders()
 RETURNS integer
 LANGUAGE plpgsql
@@ -1053,12 +1105,8 @@ SET search_path = public
 AS $$
 DECLARE
   v_count integer := 0;
-  v_today date := CURRENT_DATE;
   v_user_id uuid;
-  v_titles text[];
-  v_body text;
-  v_num integer;
-  v_existing integer;
+  v_res integer;
 BEGIN
   FOR v_user_id IN
     SELECT DISTINCT cp.user_id
@@ -1066,35 +1114,8 @@ BEGIN
     INNER JOIN challenges c ON c.id = cp.challenge_id
     WHERE c.status = 'active' AND cp.completed = false
   LOOP
-    SELECT count(*) INTO v_existing
-    FROM notifications
-    WHERE user_id = v_user_id
-      AND type = 'daily_challenge_reminder'
-      AND created_at::date = v_today;
-
-    IF v_existing > 0 THEN
-      CONTINUE;
-    END IF;
-
-    v_titles := ARRAY(SELECT get_user_challenge_reminders.title FROM get_user_challenge_reminders(v_user_id, v_today));
-
-    IF array_length(v_titles, 1) IS NULL OR array_length(v_titles, 1) = 0 THEN
-      CONTINUE;
-    END IF;
-
-    v_num := array_length(v_titles, 1);
-    v_body := concat(
-      'You have ', v_num, ' Challenge', CASE WHEN v_num > 1 THEN 's' ELSE '' END,
-      ' to complete today.', E'\n\n',
-      array_to_string(v_titles, E'\n'),
-      E'\n\nPlease complete ', CASE WHEN v_num > 1 THEN 'them' ELSE 'it' END,
-      ' before the end of today!'
-    );
-
-    INSERT INTO notifications (user_id, type, title, body, link)
-    VALUES (v_user_id, 'daily_challenge_reminder', 'Daily Challenge Reminder', v_body, '/app/study');
-
-    v_count := v_count + 1;
+    v_res := public.check_user_daily_challenge_reminder(v_user_id);
+    v_count := v_count + v_res;
   END LOOP;
 
   RETURN v_count;
@@ -1516,6 +1537,87 @@ DROP TRIGGER IF EXISTS trg_sync_forum_post_reactions_count ON forum_post_reactio
 CREATE TRIGGER trg_sync_forum_post_reactions_count
   AFTER INSERT OR DELETE ON forum_post_reactions
   FOR EACH ROW EXECUTE FUNCTION sync_forum_post_reactions_count();
+
+-- 5. Challenge Completion Trigger (029)
+CREATE OR REPLACE FUNCTION public.notify_challenge_completed()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_challenge_title text;
+  v_existing integer;
+BEGIN
+  IF NEW.completed = true AND (OLD.completed IS NULL OR OLD.completed = false) THEN
+    SELECT title INTO v_challenge_title
+    FROM challenges
+    WHERE id = NEW.challenge_id;
+
+    SELECT count(*) INTO v_existing
+    FROM notifications
+    WHERE user_id = NEW.user_id
+      AND type = 'challenge_completed'
+      AND link = '/app/study'
+      AND body LIKE '%' || COALESCE(v_challenge_title, '') || '%'
+      AND created_at > (now() - interval '1 day');
+
+    IF v_existing = 0 THEN
+      INSERT INTO notifications (user_id, type, title, body, link)
+      VALUES (
+        NEW.user_id,
+        'challenge_completed',
+        'Challenge Completed! 🎉',
+        'Congratulations! You have completed the challenge: ' || COALESCE(v_challenge_title, 'Challenge'),
+        '/app/study'
+      );
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_challenge_completed ON challenge_participants;
+CREATE TRIGGER trg_challenge_completed
+  AFTER UPDATE ON challenge_participants
+  FOR EACH ROW EXECUTE FUNCTION public.notify_challenge_completed();
+
+-- 6. Challenge Streak Trigger (029)
+CREATE OR REPLACE FUNCTION public.notify_challenge_streak()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_challenge_title text;
+  v_existing integer;
+BEGIN
+  IF NEW.streak > COALESCE(OLD.streak, 0) AND NEW.streak IN (3, 7, 14, 21, 30) THEN
+    SELECT title INTO v_challenge_title
+    FROM challenges
+    WHERE id = NEW.challenge_id;
+
+    SELECT count(*) INTO v_existing
+    FROM notifications
+    WHERE user_id = NEW.user_id
+      AND type = 'challenge_streak'
+      AND body LIKE '%' || NEW.streak || '-day%'
+      AND created_at > (now() - interval '1 day');
+
+    IF v_existing = 0 THEN
+      INSERT INTO notifications (user_id, type, title, body, link)
+      VALUES (
+        NEW.user_id,
+        'challenge_streak',
+        'Streak Milestone! 🔥',
+        'Awesome! You reached a ' || NEW.streak || '-day streak in ' || COALESCE(v_challenge_title, 'your challenge') || '!',
+        '/app/study'
+      );
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_challenge_streak ON challenge_participants;
+CREATE TRIGGER trg_challenge_streak
+  AFTER UPDATE ON challenge_participants
+  FOR EACH ROW EXECUTE FUNCTION public.notify_challenge_streak();
 
 
 -- ============================================================================

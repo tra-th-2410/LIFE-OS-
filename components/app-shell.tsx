@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -56,16 +56,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [user, loading, router]);
 
+  const refreshUnreadCount = useCallback(async () => {
+    if (!user) return;
+    const { count } = await supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_read', false);
+    setUnreadCount(count ?? 0);
+  }, [user]);
+
   useEffect(() => {
     if (user) {
+      refreshUnreadCount();
+
+      // Check daily challenge reminder for user session
       supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false)
-        .then(({ count }) => setUnreadCount(count ?? 0));
+        .rpc('check_user_daily_challenge_reminder', { p_user_id: user.id })
+        .then(({ error }) => {
+          if (!error) refreshUnreadCount();
+        });
+
+      // Realtime subscription on notifications table
+      const channel = supabase
+        .channel(`user-notifications-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            refreshUnreadCount();
+            if (payload.eventType === 'INSERT' && payload.new) {
+              const notif = payload.new as { title?: string; body?: string };
+              if (notif.title) {
+                toast.info(notif.title, {
+                  description: notif.body ?? undefined,
+                });
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
-  }, [user]);
+  }, [user, refreshUnreadCount]);
+
 
   if (loading || (user && !profile)) {
     return (

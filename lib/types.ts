@@ -333,10 +333,19 @@ export interface ChallengeCheckin {
   created_at: string;
 }
 
+export type NotificationType =
+  | 'daily_challenge_reminder'
+  | 'challenge_completed'
+  | 'challenge_streak'
+  | 'challenge_checkin'
+  | 'weekly_challenge_report'
+  | 'monthly_challenge_report'
+  | (string & {});
+
 export interface Notification {
   id: string;
   user_id: string;
-  type: string;
+  type: NotificationType;
   title: string;
   body: string | null;
   link: string | null;

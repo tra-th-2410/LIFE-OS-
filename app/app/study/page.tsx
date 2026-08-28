@@ -372,8 +372,24 @@ export default function StudyPage() {
 
       if (isComplete) {
         setCompletedChallenge(challenge);
+        supabase.from('notifications').insert({
+          user_id: user.id,
+          type: 'challenge_completed',
+          title: 'Challenge Completed! 🎉',
+          body: `Congratulations! You have completed the challenge: ${challenge.title}`,
+          link: '/app/study',
+        }).then(() => {}, () => {});
       } else {
         toast.success(`Day ${completedDays} completed! Streak: ${newStreak}`);
+        if ([3, 7, 14, 21, 30].includes(newStreak)) {
+          supabase.from('notifications').insert({
+            user_id: user.id,
+            type: 'challenge_streak',
+            title: 'Streak Milestone! 🔥',
+            body: `Awesome! You reached a ${newStreak}-day streak in ${challenge.title}!`,
+            link: '/app/study',
+          }).then(() => {}, () => {});
+        }
       }
     } catch {
       toast.error('Failed to check in');
