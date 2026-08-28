@@ -5,6 +5,7 @@ const nextConfig = {
   },
   images: { unoptimized: true },
   transpilePackages: ['react-markdown', 'remark-math', 'rehype-katex', 'katex'],
+  swcMinify: false,
 };
 
 module.exports = nextConfig;
