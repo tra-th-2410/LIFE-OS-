@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,12 +32,7 @@ import {
   FileText,
   Image as ImageIcon,
   MessageCircle,
-  Activity,
-  Flame,
-  Clock,
   Heart,
-  Bookmark,
-  Share2,
   Download,
   Check,
   UserPlus,
@@ -50,35 +45,34 @@ import type {
   ForumPost,
   Profile,
   StudyGroup,
-  Friendship,
   CommunityPostAttachment,
+  StudyGroupMessage,
 } from '@/lib/types';
-import { COMMUNITY_COLORS, formatRelativeTime, getDisplayName, initials, slugify } from '@/lib/helpers';
+import { formatRelativeTime, getDisplayName, initials, slugify } from '@/lib/helpers';
 import { ImageLightbox } from '@/components/my-life/image-lightbox';
 import { toast } from 'sonner';
 
 type CommunityTab =
   | 'feed'
   | 'forum'
-  | 'friends'
   | 'study_groups'
-  | 'documents'
-  | 'images'
   | 'chat'
-  | 'activity';
+  | 'friends'
+  | 'documents'
+  | 'images';
 
 const EMOJI_OPTIONS = ['💬', '📚', '🎮', '🎨', '🏆', '🌱', '💻', '🎵', '⚽', '🔬', '🌍', '✨'];
-const COLOR_OPTIONS = ['teal', 'blue', 'green', 'amber', 'rose', 'purple', 'orange', 'cyan'];
 
 export default function CommunityPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = (searchParams.get('tab') as CommunityTab) || 'feed';
+  const initialGroupId = searchParams.get('group');
   const { user, profile, loading: authLoading } = useAuth();
 
   const [activeTab, setActiveTab] = useState<CommunityTab>(initialTab);
 
-  // Community Feed State
+  // 1. Community Feed State
   const [communities, setCommunities] = useState<Community[]>([]);
   const [loadingCommunities, setLoadingCommunities] = useState(true);
   const [communitySearch, setCommunitySearch] = useState('');
@@ -92,7 +86,7 @@ export default function CommunityPage() {
   const [commIsPrivate, setCommIsPrivate] = useState(false);
   const [creatingCommunity, setCreatingCommunity] = useState(false);
 
-  // Forum State
+  // 2. Forum State
   const [forumCategories, setForumCategories] = useState<ForumCategory[]>([]);
   const [forumPosts, setForumPosts] = useState<(ForumPost & { author?: Profile | null; category?: ForumCategory | null })[]>([]);
   const [selectedForumCategory, setSelectedForumCategory] = useState<string>('all');
@@ -105,31 +99,54 @@ export default function CommunityPage() {
   const [forumPostAnonymous, setForumPostAnonymous] = useState(false);
   const [creatingForumPost, setCreatingForumPost] = useState(false);
 
-  // Study Groups State
+  // 3. Study Groups State & Join Flow
   const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
+  const [joinedGroupIds, setJoinedGroupIds] = useState<Set<string>>(new Set());
+  const [groupFilter, setGroupFilter] = useState<'all' | 'my'>('all');
+  const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupSubject, setGroupSubject] = useState('Toán');
   const [groupDescription, setGroupDescription] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
 
-  // Friends State
+  // 4. Friends State
   const [friends, setFriends] = useState<Profile[]>([]);
-  const [friendSearch, setFriendSearch] = useState('');
 
-  // Shared Documents & Media
+  // 5. Shared Documents & Download State
   const [documents, setDocuments] = useState<CommunityPostAttachment[]>([]);
+  const [downloadingDocId, setDownloadingDocId] = useState<string | null>(null);
+
+  // 6. Media Gallery & Lightbox
   const [images, setImages] = useState<CommunityPostAttachment[]>([]);
+  const [imageUrlsMap, setImageUrlsMap] = useState<Record<string, string>>({});
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
-  // Lightbox & image urls map
-  const [mediaSignedUrls, setMediaSignedUrls] = useState<Record<string, string>>({});
+  // 7. Live Chat Rooms & Direct Messages State
+  const [selectedChatId, setSelectedChatId] = useState<string | null>(initialGroupId || null);
+  const [selectedChatType, setSelectedChatType] = useState<'group' | 'direct'>('group');
+  const [chatMessages, setChatMessages] = useState<StudyGroupMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [sendingChatMessage, setSendingChatMessage] = useState(false);
+  const [loadingChatMessages, setLoadingChatMessages] = useState(false);
+  const [showCreateChatRoom, setShowCreateChatRoom] = useState(false);
+  const [chatRoomName, setChatRoomName] = useState('');
+  const [chatRoomSubject, setChatRoomSubject] = useState('Chung');
+  const [chatRoomDesc, setChatRoomDesc] = useState('');
+  const [creatingChatRoom, setCreatingChatRoom] = useState(false);
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null);
 
   // Synchronize Tab with URL query param if changed
   useEffect(() => {
     const tabFromUrl = searchParams.get('tab') as CommunityTab;
     if (tabFromUrl && tabFromUrl !== activeTab) {
       setActiveTab(tabFromUrl);
+    }
+    const groupFromUrl = searchParams.get('group');
+    if (groupFromUrl) {
+      setSelectedChatId(groupFromUrl);
+      setSelectedChatType('group');
     }
   }, [searchParams]);
 
@@ -142,42 +159,49 @@ export default function CommunityPage() {
         supabase.from('forum_categories').select('*').order('sort_order', { ascending: true }),
         supabase.from('forum_posts').select('*, author:profiles!forum_posts_author_id_fkey(username, display_name, avatar_url, id), category:forum_categories!forum_posts_category_id_fkey(*)').eq('status', 'active').order('created_at', { ascending: false }).limit(20),
         supabase.from('study_groups').select('*').order('members_count', { ascending: false }),
-        supabase.from('community_post_attachments').select('*').order('created_at', { ascending: false }).limit(30),
+        supabase.from('community_post_attachments').select('*').order('created_at', { ascending: false }).limit(40),
       ]);
 
       setCommunities((commRes.data as Community[]) ?? []);
       setForumCategories((catRes.data as ForumCategory[]) ?? []);
       setForumPosts((postsRes.data as (ForumPost & { author?: Profile | null; category?: ForumCategory | null })[]) ?? []);
-      
+
       const grps = (groupsRes.data as StudyGroup[]) ?? [];
-      // If no study groups in DB yet, provide realistic starter groups
-      if (grps.length === 0) {
-        setStudyGroups([
-          { id: '1', name: 'Đội Luyện Thi THPT QG Toán 9+', slug: 'toan-thpt-9plus', avatar_url: null, description: 'Ôn luyện các dạng đề nâng cao 9+ môn Toán và phương pháp Casio tối ưu.', subject: 'Toán', creator_id: null, members_count: 14, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '2', name: 'CLB IELTS Speaking 7.5+ Everyday', slug: 'ielts-speaking-club', avatar_url: null, description: 'Luyện tập Speaking theo cặp mỗi tối 20:30, chấm bài và sửa lỗi phát âm.', subject: 'English', creator_id: null, members_count: 28, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-          { id: '3', name: 'Nhóm Tự Học Lập Trình Web & AI', slug: 'coding-ai-study-group', avatar_url: null, description: 'Cùng làm project thực chiến Next.js, Python AI và giải thuật thuật toán.', subject: 'Tin học', creator_id: null, members_count: 19, created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-        ]);
-      } else {
-        setStudyGroups(grps);
-      }
+      setStudyGroups(grps);
 
       const allAtts = (attsRes.data as CommunityPostAttachment[]) ?? [];
-      setDocuments(allAtts.filter((a) => !a.is_image));
-      setImages(allAtts.filter((a) => a.is_image));
+      const docList = allAtts.filter((a) => !a.is_image);
+      const imgList = allAtts.filter((a) => a.is_image);
+      setDocuments(docList);
+      setImages(imgList);
 
-      // Fetch sample friends
-      if (user) {
-        const { data: friendRows } = await supabase
-          .from('friendships')
-          .select('friend:profiles!friendships_friend_id_fkey(*)')
-          .eq('user_id', user.id)
-          .eq('status', 'accepted');
-
-        if (friendRows && friendRows.length > 0) {
-          setFriends(friendRows.map((r: any) => r.friend).filter(Boolean));
+      // Resolve URLs for images
+      const imgMap: Record<string, string> = {};
+      for (const img of imgList) {
+        if (img.file_path.startsWith('http')) {
+          imgMap[img.id] = img.file_path;
         } else {
-          // Load suggested public profiles
-          const { data: publicProfiles } = await supabase.from('profiles').select('*').neq('id', user.id).limit(6);
+          const { data: pubData } = supabase.storage.from('forum-images').getPublicUrl(img.file_path);
+          imgMap[img.id] = pubData?.publicUrl || img.file_path;
+        }
+      }
+      setImageUrlsMap(imgMap);
+
+      // Load user's joined study groups & friends
+      if (user) {
+        const [memberRes, friendRows] = await Promise.all([
+          supabase.from('study_group_members').select('group_id').eq('user_id', user.id),
+          supabase.from('friendships').select('friend:profiles!friendships_friend_id_fkey(*)').eq('user_id', user.id).eq('status', 'accepted'),
+        ]);
+
+        if (memberRes.data) {
+          setJoinedGroupIds(new Set(memberRes.data.map((m: any) => m.group_id)));
+        }
+
+        if (friendRows.data && friendRows.data.length > 0) {
+          setFriends(friendRows.data.map((r: any) => r.friend).filter(Boolean));
+        } else {
+          const { data: publicProfiles } = await supabase.from('profiles').select('*').neq('id', user.id).limit(8);
           setFriends((publicProfiles as Profile[]) ?? []);
         }
       }
@@ -192,7 +216,176 @@ export default function CommunityPage() {
     if (!authLoading) loadData();
   }, [authLoading, loadData]);
 
-  // Handle Create Community
+  // Load Live Chat Messages when selectedChatId changes
+  useEffect(() => {
+    if (!selectedChatId) return;
+    let isMounted = true;
+    setLoadingChatMessages(true);
+
+    const loadMessages = async () => {
+      try {
+        const { data } = await supabase
+          .from('study_group_messages')
+          .select('*, sender:profiles(id, username, display_name, avatar_url)')
+          .eq('group_id', selectedChatId)
+          .order('created_at', { ascending: true })
+          .limit(50);
+
+        if (isMounted && data) {
+          setChatMessages(data as StudyGroupMessage[]);
+        }
+      } catch (err) {
+        console.error('Error loading chat messages:', err);
+      } finally {
+        if (isMounted) setLoadingChatMessages(false);
+      }
+    };
+
+    loadMessages();
+
+    // Setup Supabase Realtime Subscription for new chat messages
+    const channel = supabase
+      .channel(`study-group-chat-${selectedChatId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'study_group_messages',
+          filter: `group_id=eq.${selectedChatId}`,
+        },
+        async (payload) => {
+          if (payload.new) {
+            const { data: senderData } = await supabase
+              .from('profiles')
+              .select('id, username, display_name, avatar_url')
+              .eq('id', (payload.new as any).sender_id)
+              .maybeSingle();
+
+            const newMsg: StudyGroupMessage = {
+              ...(payload.new as any),
+              sender: senderData ?? undefined,
+            };
+
+            setChatMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [selectedChatId]);
+
+  // Auto scroll chat to bottom
+  useEffect(() => {
+    chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, loadingChatMessages]);
+
+  // -------------------------------------------------------------
+  // 1. JOIN STUDY GROUP HANDLER (FIXED FLOW)
+  // -------------------------------------------------------------
+  const handleJoinGroup = async (group: StudyGroup) => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+
+    if (joinedGroupIds.has(group.id)) {
+      toast.info('Bạn đã là thành viên của nhóm học này');
+      return;
+    }
+
+    setJoiningGroupId(group.id);
+    try {
+      const { error } = await supabase.from('study_group_members').insert({
+        group_id: group.id,
+        user_id: user.id,
+        role: 'member',
+      });
+
+      if (error && error.code !== '23505') {
+        throw error;
+      }
+
+      await supabase
+        .from('study_groups')
+        .update({ members_count: (group.members_count || 1) + 1 })
+        .eq('id', group.id);
+
+      setJoinedGroupIds((prev) => {
+        const next = new Set(Array.from(prev));
+        next.add(group.id);
+        return next;
+      });
+      setStudyGroups((prev) =>
+        prev.map((g) => (g.id === group.id ? { ...g, members_count: (g.members_count || 1) + 1 } : g))
+      );
+
+      toast.success(`Đã tham gia nhóm học "${group.name}" thành công!`);
+    } catch (err: any) {
+      console.error('Error joining study group:', err);
+      toast.error('Không thể tham gia nhóm. Vui lòng thử lại sau.');
+    } finally {
+      setJoiningGroupId(null);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 2. DOCUMENT DOWNLOAD HANDLER (FIXED FLOW)
+  // -------------------------------------------------------------
+  const handleDownloadDocument = async (doc: CommunityPostAttachment) => {
+    setDownloadingDocId(doc.id);
+    try {
+      let downloadUrl = '';
+
+      if (doc.file_path.startsWith('http')) {
+        downloadUrl = doc.file_path;
+      } else {
+        const { data: signedData, error: signedErr } = await supabase.storage
+          .from('community-files')
+          .createSignedUrl(doc.file_path, 3600);
+
+        if (!signedErr && signedData?.signedUrl) {
+          downloadUrl = signedData.signedUrl;
+        } else {
+          const { data: pubData } = supabase.storage
+            .from('community-files')
+            .getPublicUrl(doc.file_path);
+          downloadUrl = pubData?.publicUrl || '';
+        }
+      }
+
+      if (!downloadUrl) {
+        throw new Error('Không tạo được đường dẫn tải tệp');
+      }
+
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = doc.file_name || 'tai-lieu-hoc-tap';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success(`Đang tải xuống "${doc.file_name}"...`);
+    } catch (err) {
+      console.error('Error downloading document:', err);
+      toast.error('Không thể tải xuống tệp. Vui lòng thử lại sau.');
+    } finally {
+      setDownloadingDocId(null);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 3. CREATE HANDLERS (COMMUNITY, FORUM, GROUP, CHAT ROOM)
+  // -------------------------------------------------------------
   const handleCreateCommunity = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -217,7 +410,7 @@ export default function CommunityPage() {
 
       if (error) throw error;
       const newComm = data as Community;
-      setCommunities([newComm, ...communities]);
+      setCommunities((prev) => [newComm, ...prev]);
       setShowCreateCommunity(false);
       setCommName('');
       setCommDescription('');
@@ -231,7 +424,6 @@ export default function CommunityPage() {
     }
   };
 
-  // Handle Create Forum Post
   const handleCreateForumPost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -259,7 +451,7 @@ export default function CommunityPage() {
         .single();
 
       if (error) throw error;
-      setForumPosts([data as any, ...forumPosts]);
+      setForumPosts((prev) => [data as any, ...prev]);
       setShowCreateForumPost(false);
       setForumPostTitle('');
       setForumPostContent('');
@@ -272,21 +464,13 @@ export default function CommunityPage() {
     }
   };
 
-  // Handle Create Study Group
   const handleCreateStudyGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    if (!groupName.trim()) {
-      toast.error('Vui lòng nhập tên nhóm học tập');
-      return;
-    }
+    if (!user || !groupName.trim()) return;
     setCreatingGroup(true);
     try {
       const slug = slugify(groupName.trim()) || `group-${Date.now().toString(36)}`;
-      const { data, error } = await supabase
+      const { data: newGrp, error } = await supabase
         .from('study_groups')
         .insert({
           name: groupName.trim(),
@@ -299,62 +483,152 @@ export default function CommunityPage() {
         .select()
         .single();
 
-      if (!error && data) {
+      if (!error && newGrp) {
         await supabase.from('study_group_members').insert({
-          group_id: (data as any).id,
+          group_id: newGrp.id,
           user_id: user.id,
           role: 'owner',
         });
-        setStudyGroups([data as StudyGroup, ...studyGroups]);
-      } else {
-        // Local state fallback if table pending
-        const localGroup: StudyGroup = {
-          id: `temp-${Date.now()}`,
-          name: groupName.trim(),
-          slug,
-          subject: groupSubject,
-          avatar_url: null,
-          description: groupDescription.trim(),
-          creator_id: user.id,
-          members_count: 1,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setStudyGroups([localGroup, ...studyGroups]);
+        setStudyGroups((prev) => [newGrp as StudyGroup, ...prev]);
+        setJoinedGroupIds((prev) => {
+          const next = new Set(Array.from(prev));
+          next.add(newGrp.id);
+          return next;
+        });
       }
-
       setShowCreateGroup(false);
       setGroupName('');
       setGroupDescription('');
-      toast.success('Nhóm học tập mới đã được tạo thành công!');
-    } catch (err) {
-      console.error(err);
-      toast.error('Không thể tạo nhóm');
+      toast.success('Đã tạo nhóm học tập thành công!');
+    } catch {
+      toast.error('Không thể tạo nhóm học');
     } finally {
       setCreatingGroup(false);
     }
   };
 
-  const filteredCommunities = communities.filter((c) => {
-    const q = communitySearch.toLowerCase();
-    return c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q);
-  });
+  const handleCreateChatRoom = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (!chatRoomName.trim()) {
+      toast.error('Vui lòng nhập tên phòng chat');
+      return;
+    }
 
-  const filteredForumPosts = forumPosts.filter((p) => {
-    const matchCategory = selectedForumCategory === 'all' || p.category_id === selectedForumCategory || (p.category && p.category.slug === selectedForumCategory);
-    const matchSearch = !forumSearch || p.title.toLowerCase().includes(forumSearch.toLowerCase()) || p.content.toLowerCase().includes(forumSearch.toLowerCase());
-    return matchCategory && matchSearch;
-  });
+    setCreatingChatRoom(true);
+    try {
+      const slug = slugify(chatRoomName.trim()) || `room-${Date.now().toString(36)}`;
+      const { data: newRoom, error: roomErr } = await supabase
+        .from('study_groups')
+        .insert({
+          name: chatRoomName.trim(),
+          slug,
+          subject: chatRoomSubject.trim() || 'Chung',
+          description: chatRoomDesc.trim(),
+          creator_id: user.id,
+          members_count: 1 + selectedFriendIds.length,
+        })
+        .select()
+        .single();
 
+      if (roomErr) throw roomErr;
+
+      // Add creator as owner member
+      await supabase.from('study_group_members').insert({
+        group_id: newRoom.id,
+        user_id: user.id,
+        role: 'owner',
+      });
+
+      // Add invited friends if selected
+      if (selectedFriendIds.length > 0) {
+        const friendInserts = selectedFriendIds.map((fId) => ({
+          group_id: newRoom.id,
+          user_id: fId,
+          role: 'member',
+        }));
+        await supabase.from('study_group_members').insert(friendInserts);
+      }
+
+      setStudyGroups((prev) => [newRoom, ...prev]);
+      setJoinedGroupIds((prev) => {
+        const next = new Set(Array.from(prev));
+        next.add(newRoom.id);
+        return next;
+      });
+      setSelectedChatId(newRoom.id);
+      setSelectedChatType('group');
+      setShowCreateChatRoom(false);
+      setChatRoomName('');
+      setChatRoomDesc('');
+      setSelectedFriendIds([]);
+      toast.success(`Đã tạo phòng chat "${newRoom.name}" thành công!`);
+    } catch (err: any) {
+      console.error('Error creating chat room:', err);
+      toast.error('Không thể tạo phòng chat');
+    } finally {
+      setCreatingChatRoom(false);
+    }
+  };
+
+  const handleSendChatMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !selectedChatId || !user || sendingChatMessage) return;
+
+    const content = chatInput.trim();
+    setChatInput('');
+    setSendingChatMessage(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('study_group_messages')
+        .insert({
+          group_id: selectedChatId,
+          sender_id: user.id,
+          content,
+          attachments: [],
+        })
+        .select('*, sender:profiles(id, username, display_name, avatar_url)')
+        .single();
+
+      if (!error && data) {
+        setChatMessages((prev) => {
+          if (prev.some((m) => m.id === data.id)) return prev;
+          return [...prev, data as StudyGroupMessage];
+        });
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+      toast.error('Không gửi được tin nhắn');
+    } finally {
+      setSendingChatMessage(false);
+    }
+  };
+
+  // Filtered Study Groups
+  const filteredStudyGroups = useMemo(() => {
+    if (groupFilter === 'my') {
+      return studyGroups.filter((g) => joinedGroupIds.has(g.id) || g.creator_id === user?.id);
+    }
+    return studyGroups;
+  }, [studyGroups, groupFilter, joinedGroupIds, user]);
+
+  const activeGroup = useMemo(() => {
+    return studyGroups.find((g) => g.id === selectedChatId) || null;
+  }, [studyGroups, selectedChatId]);
+
+  // Clean 7 Tab definitions (strictly removing Recent Activity)
   const tabItems = [
     { id: 'feed' as const, label: 'Cộng đồng', icon: Users },
     { id: 'forum' as const, label: 'Diễn đàn (Forum)', icon: MessageSquare },
     { id: 'study_groups' as const, label: 'Nhóm học tập', icon: BookOpen },
+    { id: 'chat' as const, label: 'Trò chuyện & Phòng chat', icon: MessageCircle },
     { id: 'friends' as const, label: 'Bạn bè & Bạn học', icon: UserPlus },
     { id: 'documents' as const, label: 'Tài liệu chia sẻ', icon: FileText },
     { id: 'images' as const, label: 'Thư viện ảnh', icon: ImageIcon },
-    { id: 'chat' as const, label: 'Trò chuyện', icon: MessageCircle },
-    { id: 'activity' as const, label: 'Hoạt động gần đây', icon: Activity },
   ];
 
   return (
@@ -369,11 +643,11 @@ export default function CommunityPage() {
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Không gian trao đổi kiến thức, diễn đàn học thuật, nhóm học tập và chia sẻ tài liệu Life OS.
+            Không gian trao đổi kiến thức, diễn đàn học thuật, nhóm học tập, phòng chat và chia sẻ tài liệu Life OS.
           </p>
         </div>
 
-        {/* Create Action Buttons based on Active Tab */}
+        {/* Dynamic Action Buttons based on Active Tab */}
         <div className="flex items-center gap-2">
           {activeTab === 'forum' ? (
             <Button onClick={() => setShowCreateForumPost(true)} className="gap-1.5 rounded-xl">
@@ -382,6 +656,10 @@ export default function CommunityPage() {
           ) : activeTab === 'study_groups' ? (
             <Button onClick={() => setShowCreateGroup(true)} className="gap-1.5 rounded-xl">
               <Plus className="h-4 w-4" /> Tạo nhóm học mới
+            </Button>
+          ) : activeTab === 'chat' ? (
+            <Button onClick={() => setShowCreateChatRoom(true)} className="gap-1.5 rounded-xl bg-primary text-primary-foreground font-semibold">
+              <Plus className="h-4 w-4" /> Tạo phòng chat
             </Button>
           ) : (
             <Button onClick={() => setShowCreateCommunity(true)} className="gap-1.5 rounded-xl">
@@ -417,7 +695,7 @@ export default function CommunityPage() {
       </div>
 
       {/* ========================================================= */}
-      {/* 1. TAB: FEED (COMMUNITIES DIRECTORY & POSTS)              */}
+      {/* 1. TAB: FEED (COMMUNITIES DIRECTORY & DISCOVERY)          */}
       {/* ========================================================= */}
       {activeTab === 'feed' && (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -437,7 +715,7 @@ export default function CommunityPage() {
                 <div key={i} className="h-40 rounded-2xl animate-shimmer" />
               ))}
             </div>
-          ) : filteredCommunities.length === 0 ? (
+          ) : communities.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <Users className="h-10 w-10 text-muted-foreground/40 mb-3" />
@@ -446,44 +724,49 @@ export default function CommunityPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredCommunities.map((c) => (
-                <Link key={c.id} href={`/app/community/${c.slug}`}>
-                  <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-200 h-full bg-card/80">
-                    <CardContent className="p-5">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-2xl group-hover:scale-105 transition-transform">
-                          {c.icon}
+              {communities
+                .filter((c) => {
+                  const q = communitySearch.toLowerCase();
+                  return c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q);
+                })
+                .map((c) => (
+                  <Link key={c.id} href={`/app/community/${c.slug}`}>
+                    <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-200 h-full bg-card/80">
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-2xl group-hover:scale-105 transition-transform">
+                            {c.icon}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            {c.is_anonymous && (
+                              <Badge variant="outline" className="text-[10px] gap-1">
+                                <Eye className="h-3 w-3" /> Ẩn danh
+                              </Badge>
+                            )}
+                            {c.is_private && (
+                              <Badge variant="outline" className="text-[10px] gap-1">
+                                <Lock className="h-3 w-3" /> Riêng tư
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          {c.is_anonymous && (
-                            <Badge variant="outline" className="text-[10px] gap-1">
-                              <Eye className="h-3 w-3" /> Ẩn danh
-                            </Badge>
-                          )}
-                          {c.is_private && (
-                            <Badge variant="outline" className="text-[10px] gap-1">
-                              <Lock className="h-3 w-3" /> Riêng tư
-                            </Badge>
-                          )}
+                        <h3 className="font-semibold text-base group-hover:text-primary transition-colors">{c.name}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{c.description}</p>
+                        <div className="mt-4 flex items-center gap-1 text-xs text-muted-foreground">
+                          <Users className="h-3.5 w-3.5" />
+                          <span>{c.members_count.toLocaleString()} thành viên</span>
                         </div>
-                      </div>
-                      <h3 className="font-semibold text-base group-hover:text-primary transition-colors">{c.name}</h3>
-                      <p className="mt-1 text-xs text-muted-foreground line-clamp-2 leading-relaxed">{c.description}</p>
-                      <div className="mt-4 flex items-center gap-1 text-xs text-muted-foreground">
-                        <Users className="h-3.5 w-3.5" />
-                        <span>{c.members_count.toLocaleString()} thành viên</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
             </div>
           )}
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* 2. TAB: FORUM (INTEGRATED FULL FORUM MODULE)               */}
+      {/* 2. TAB: FORUM (INTEGRATED FORUM MODULE)                   */}
       {/* ========================================================= */}
       {activeTab === 'forum' && (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -559,12 +842,11 @@ export default function CommunityPage() {
           </div>
 
           {/* Forum Posts List */}
-          {filteredForumPosts.length === 0 ? (
+          {forumPosts.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <MessageSquare className="h-10 w-10 text-muted-foreground/40 mb-3" />
                 <p className="text-sm font-medium text-foreground">Chưa có bài thảo luận nào phù hợp</p>
-                <p className="text-xs text-muted-foreground mt-1">Hãy là người đầu tiên mở chủ đề thảo luận!</p>
                 <Button onClick={() => setShowCreateForumPost(true)} size="sm" className="mt-4 rounded-xl">
                   <Plus className="h-4 w-4 mr-1.5" /> Tạo bài thảo luận
                 </Button>
@@ -572,48 +854,191 @@ export default function CommunityPage() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredForumPosts.map((p) => {
-                const authorDisplay = p.is_anonymous ? 'Sinh viên ẩn danh' : getDisplayName(p.author, 'Bạn học');
-                return (
-                  <Card key={p.id} className="border-border/60 hover:border-primary/40 hover:shadow-xs transition-all bg-card/80">
-                    <CardContent className="p-4 sm:p-5">
-                      <div className="flex items-start gap-3">
-                        <Avatar className="h-9 w-9 shrink-0">
-                          {p.author?.avatar_url && !p.is_anonymous && (
-                            <AvatarImage src={p.author.avatar_url} alt={authorDisplay} />
-                          )}
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
-                            {p.is_anonymous ? 'A' : initials(authorDisplay)}
-                          </AvatarFallback>
-                        </Avatar>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap text-xs">
-                            <span className="font-semibold text-foreground">{authorDisplay}</span>
-                            <span className="text-muted-foreground">• {formatRelativeTime(p.created_at)}</span>
-                            {p.category && (
-                              <Badge variant="secondary" className="text-[10px] gap-1">
-                                {p.category.icon} {p.category.name}
-                              </Badge>
+              {forumPosts
+                .filter((p) => {
+                  const matchCat =
+                    selectedForumCategory === 'all' ||
+                    p.category_id === selectedForumCategory ||
+                    (p.category && p.category.slug === selectedForumCategory);
+                  const matchSearch =
+                    !forumSearch ||
+                    p.title.toLowerCase().includes(forumSearch.toLowerCase()) ||
+                    p.content.toLowerCase().includes(forumSearch.toLowerCase());
+                  return matchCat && matchSearch;
+                })
+                .map((p) => {
+                  const authorDisplay = p.is_anonymous ? 'Sinh viên ẩn danh' : getDisplayName(p.author, 'Bạn học');
+                  return (
+                    <Card key={p.id} className="border-border/60 hover:border-primary/40 hover:shadow-xs transition-all bg-card/80">
+                      <CardContent className="p-4 sm:p-5">
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-9 w-9 shrink-0">
+                            {p.author?.avatar_url && !p.is_anonymous && (
+                              <AvatarImage src={p.author.avatar_url} alt={authorDisplay} />
                             )}
-                          </div>
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
+                              {p.is_anonymous ? 'A' : initials(authorDisplay)}
+                            </AvatarFallback>
+                          </Avatar>
 
-                          <h3 className="font-bold text-base text-foreground mt-1 leading-snug hover:text-primary transition-colors">
-                            {p.title}
-                          </h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed whitespace-pre-wrap">
-                            {p.content}
-                          </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className="font-semibold text-foreground">{authorDisplay}</span>
+                              <span className="text-muted-foreground">• {formatRelativeTime(p.created_at)}</span>
+                              {p.category && (
+                                <Badge variant="secondary" className="text-[10px] gap-1">
+                                  {p.category.icon} {p.category.name}
+                                </Badge>
+                              )}
+                            </div>
 
-                          <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
-                            <span className="flex items-center gap-1">
-                              <MessageSquare className="h-3.5 w-3.5" /> {p.comments_count || 0} phản hồi
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Heart className="h-3.5 w-3.5 text-rose-500" /> {p.reactions_count || 0} cảm xúc
-                            </span>
+                            <h3 className="font-bold text-base text-foreground mt-1 leading-snug hover:text-primary transition-colors">
+                              {p.title}
+                            </h3>
+                            <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed whitespace-pre-wrap">
+                              {p.content}
+                            </p>
+
+                            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
+                              <span className="flex items-center gap-1">
+                                <MessageSquare className="h-3.5 w-3.5" /> {p.comments_count || 0} phản hồi
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Heart className="h-3.5 w-3.5 text-rose-500" /> {p.reactions_count || 0} cảm xúc
+                              </span>
+                            </div>
                           </div>
                         </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 3. TAB: STUDY GROUPS (WITH FUNCTIONAL JOIN FLOW)          */}
+      {/* ========================================================= */}
+      {activeTab === 'study_groups' && (
+        <div className="space-y-6 animate-in fade-in duration-200">
+          {/* Subfilter: Tất cả nhóm vs Nhóm của tôi */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setGroupFilter('all')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                  groupFilter === 'all'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:text-foreground'
+                }`}
+              >
+                Tất cả nhóm ({studyGroups.length})
+              </button>
+              <button
+                onClick={() => setGroupFilter('my')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                  groupFilter === 'my'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-muted/40 text-muted-foreground border-border/60 hover:text-foreground'
+                }`}
+              >
+                Nhóm của tôi ({studyGroups.filter((g) => joinedGroupIds.has(g.id) || g.creator_id === user?.id).length})
+              </button>
+            </div>
+
+            <Button onClick={() => setShowCreateGroup(true)} size="sm" className="gap-1.5 rounded-xl">
+              <Plus className="h-4 w-4" /> Tạo nhóm học
+            </Button>
+          </div>
+
+          {filteredStudyGroups.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <BookOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm font-medium text-foreground">
+                  {groupFilter === 'my' ? 'Bạn chưa tham gia nhóm học tập nào' : 'Chưa có nhóm học tập nào'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Hãy tham gia một nhóm học hoặc tự tạo nhóm cùng bạn bè!
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {filteredStudyGroups.map((group) => {
+                const isJoined = joinedGroupIds.has(group.id) || group.creator_id === user?.id;
+                const isJoining = joiningGroupId === group.id;
+
+                return (
+                  <Card
+                    key={group.id}
+                    className={`border-border/60 hover:border-primary/40 hover:shadow-md transition-all bg-card/80 flex flex-col justify-between ${
+                      isJoined ? 'border-primary/20 bg-primary/5' : ''
+                    }`}
+                  >
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl font-bold">
+                          📚
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Badge variant="outline" className="text-xs">
+                            {group.subject}
+                          </Badge>
+                          {isJoined && (
+                            <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px]">
+                              <Check className="h-3 w-3 mr-0.5" /> Đã tham gia
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="font-bold text-base text-foreground leading-snug">{group.name}</h3>
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
+                          {group.description || 'Nhóm học tập, thảo luận kiến thức và chia sẻ tài liệu ôn thi.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-muted-foreground pt-3 border-t border-border/40">
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" /> {group.members_count || 1} thành viên
+                        </span>
+
+                        {isJoined ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              setSelectedChatId(group.id);
+                              setSelectedChatType('group');
+                              setActiveTab('chat');
+                              router.push(`/app/community?tab=chat&group=${group.id}`, { scroll: false });
+                            }}
+                            className="rounded-xl h-8 text-xs font-semibold text-primary gap-1"
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" /> Vào phòng chat
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => handleJoinGroup(group)}
+                            disabled={isJoining}
+                            className="rounded-xl h-8 text-xs font-semibold bg-primary text-primary-foreground gap-1"
+                          >
+                            {isJoining ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" /> Đang tham gia...
+                              </>
+                            ) : (
+                              <>
+                                <UserPlus className="h-3.5 w-3.5" /> Tham gia nhóm
+                              </>
+                            )}
+                          </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -625,47 +1050,206 @@ export default function CommunityPage() {
       )}
 
       {/* ========================================================= */}
-      {/* 3. TAB: STUDY GROUPS (STUDY GROUPS ARCHITECTURE)           */}
+      {/* 4. TAB: CHAT (DIRECT MESSAGES & LIVE CHAT ROOMS HUB)       */}
       {/* ========================================================= */}
-      {activeTab === 'study_groups' && (
-        <div className="space-y-6 animate-in fade-in duration-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {studyGroups.map((group) => (
-              <Card key={group.id} className="border-border/60 hover:border-primary/40 hover:shadow-md transition-all bg-card/80 flex flex-col justify-between">
-                <CardContent className="p-5 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl font-bold">
-                      📚
+      {activeTab === 'chat' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-[650px] border border-border/60 rounded-2xl bg-card overflow-hidden shadow-sm">
+            {/* Left Column: Room & Direct Message Directory */}
+            <div className="border-r border-border/60 flex flex-col h-full bg-muted/20">
+              <div className="p-3.5 border-b border-border/60 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-4 w-4 text-primary" />
+                  <span className="font-bold text-sm text-foreground">Trò chuyện & Nhóm chat</span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowCreateChatRoom(true)}
+                  className="h-8 text-xs font-semibold gap-1 px-2.5 rounded-lg border-primary/30 text-primary hover:bg-primary/10"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Tạo phòng
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-2 space-y-4 scrollbar-thin">
+                {/* Section A: Chat Rooms (Nhóm học tập) */}
+                <div className="space-y-1">
+                  <p className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Phòng chat nhóm ({studyGroups.length})
+                  </p>
+                  {studyGroups.length === 0 ? (
+                    <div className="p-3 text-xs text-muted-foreground text-center">
+                      Chưa có phòng chat nào. Nhấn "+ Tạo phòng" để bắt đầu!
                     </div>
-                    <Badge variant="outline" className="text-xs">
-                      {group.subject}
-                    </Badge>
+                  ) : (
+                    studyGroups.map((g) => {
+                      const isSelected = selectedChatId === g.id && selectedChatType === 'group';
+                      return (
+                        <button
+                          key={g.id}
+                          onClick={() => {
+                            setSelectedChatId(g.id);
+                            setSelectedChatType('group');
+                          }}
+                          className={`w-full flex items-center gap-2.5 p-2.5 rounded-xl text-left transition-all ${
+                            isSelected
+                              ? 'bg-primary/15 text-primary font-semibold shadow-xs'
+                              : 'hover:bg-muted/60 text-foreground'
+                          }`}
+                        >
+                          <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
+                            #
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold truncate leading-tight">{g.name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{g.members_count || 1} thành viên</p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Section B: Direct Messages (Bạn bè) */}
+                <div className="space-y-1 pt-2 border-t border-border/40">
+                  <p className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                    Tin nhắn trực tiếp
+                  </p>
+                  {friends.slice(0, 5).map((friend) => (
+                    <button
+                      key={friend.id}
+                      onClick={() => {
+                        setSelectedChatId(friend.id);
+                        setSelectedChatType('direct');
+                      }}
+                      className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition-all ${
+                        selectedChatId === friend.id && selectedChatType === 'direct'
+                          ? 'bg-primary/15 text-primary font-semibold'
+                          : 'hover:bg-muted/60 text-foreground'
+                      }`}
+                    >
+                      <Avatar className="h-8 w-8 shrink-0">
+                        {friend.avatar_url && <AvatarImage src={friend.avatar_url} />}
+                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-bold">
+                          {initials(getDisplayName(friend))}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold truncate">{getDisplayName(friend)}</p>
+                        <p className="text-[10px] text-muted-foreground truncate">@{friend.username}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Live Interactive Chat Stream */}
+            <div className="md:col-span-2 flex flex-col h-full bg-background">
+              {selectedChatId ? (
+                <>
+                  {/* Chat Top Bar */}
+                  <div className="p-3 px-4 border-b border-border/60 flex items-center justify-between bg-card/60">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
+                        {selectedChatType === 'group' ? '#' : '@'}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-sm text-foreground truncate">
+                          {activeGroup?.name || 'Phòng thảo luận trực tiếp'}
+                        </h4>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {activeGroup?.description || 'Kênh trao đổi bài tập và giải đề'}
+                        </p>
+                      </div>
+                    </div>
                   </div>
 
-                  <div>
-                    <h3 className="font-bold text-base text-foreground leading-snug">{group.name}</h3>
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2 leading-relaxed">
-                      {group.description || 'Nhóm học tập, thảo luận kiến thức và chia sẻ tài liệu ôn thi.'}
-                    </p>
+                  {/* Messages Feed */}
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+                    {loadingChatMessages ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      </div>
+                    ) : chatMessages.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-full text-center space-y-2 text-muted-foreground p-6">
+                        <MessageCircle className="h-10 w-10 text-muted-foreground/30" />
+                        <p className="text-xs font-medium text-foreground">Chưa có tin nhắn nào trong phòng này</p>
+                        <p className="text-[11px]">Hãy gửi lời chào đầu tiên để bắt đầu buổi thảo luận!</p>
+                      </div>
+                    ) : (
+                      chatMessages.map((msg) => {
+                        const isMe = msg.sender_id === user?.id;
+                        const senderName = isMe ? 'Bạn' : getDisplayName(msg.sender, 'Bạn học');
+                        return (
+                          <div key={msg.id} className={`flex gap-2.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            {!isMe && (
+                              <Avatar className="h-7 w-7 shrink-0 mt-0.5">
+                                {msg.sender?.avatar_url && <AvatarImage src={msg.sender.avatar_url} />}
+                                <AvatarFallback className="text-[9px] bg-primary/10 text-primary font-bold">
+                                  {initials(senderName)}
+                                </AvatarFallback>
+                              </Avatar>
+                            )}
+                            <div className="max-w-[75%] space-y-1">
+                              {!isMe && (
+                                <p className="text-[10px] font-semibold text-muted-foreground px-1">{senderName}</p>
+                              )}
+                              <div
+                                className={`p-2.5 px-3 rounded-2xl text-xs leading-relaxed ${
+                                  isMe
+                                    ? 'bg-primary text-primary-foreground rounded-tr-xs'
+                                    : 'bg-muted/70 text-foreground border border-border/40 rounded-tl-xs'
+                                }`}
+                              >
+                                <p className="whitespace-pre-wrap">{msg.content}</p>
+                              </div>
+                              <p className={`text-[9px] text-muted-foreground px-1 ${isMe ? 'text-right' : 'text-left'}`}>
+                                {formatRelativeTime(msg.created_at)}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                    <div ref={chatMessagesEndRef} />
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/40">
-                    <span className="flex items-center gap-1">
-                      <Users className="h-3.5 w-3.5" /> {group.members_count} thành viên
-                    </span>
-                    <Button size="sm" variant="outline" className="rounded-xl h-8 text-xs font-medium">
-                      Vào nhóm
+                  {/* Message Input Box */}
+                  <form onSubmit={handleSendChatMessage} className="p-3 border-t border-border/60 flex items-center gap-2 bg-card">
+                    <Input
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      placeholder="Nhập tin nhắn trao đổi trong phòng..."
+                      className="flex-1 text-xs h-9 bg-muted/40 rounded-xl"
+                    />
+                    <Button type="submit" disabled={!chatInput.trim() || sendingChatMessage} size="sm" className="h-9 px-3 rounded-xl gap-1">
+                      {sendingChatMessage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                     </Button>
+                  </form>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-3 p-8">
+                  <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-2xl">
+                    💬
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                  <h4 className="font-bold text-base text-foreground">Chọn hoặc tạo phòng chat</h4>
+                  <p className="text-xs text-muted-foreground max-w-sm">
+                    Chọn một nhóm học tập bên trái để mở phòng trò chuyện trực tiếp, hoặc nhấn Tạo phòng để lập nhóm mới.
+                  </p>
+                  <Button onClick={() => setShowCreateChatRoom(true)} size="sm" className="gap-1.5 rounded-xl">
+                    <Plus className="h-4 w-4" /> Tạo phòng chat mới
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* 4. TAB: FRIENDS                                            */}
+      {/* 5. TAB: FRIENDS & STUDY MATES                             */}
       {/* ========================================================= */}
       {activeTab === 'friends' && (
         <div className="space-y-6 animate-in fade-in duration-200">
@@ -699,7 +1283,7 @@ export default function CommunityPage() {
       )}
 
       {/* ========================================================= */}
-      {/* 5. TAB: DOCUMENTS                                          */}
+      {/* 6. TAB: DOCUMENTS (WITH REAL DOWNLOAD FLOW)               */}
       {/* ========================================================= */}
       {activeTab === 'documents' && (
         <div className="space-y-4 animate-in fade-in duration-200">
@@ -712,27 +1296,47 @@ export default function CommunityPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {documents.map((doc) => (
-                <Card key={doc.id} className="border-border/60 p-4 bg-card/80 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5 min-w-0 pr-2">
-                    <FileText className="h-5 w-5 text-primary shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-medium text-xs text-foreground truncate">{doc.file_name}</p>
-                      <p className="text-[10px] text-muted-foreground">{formatRelativeTime(doc.created_at)}</p>
+              {documents.map((doc) => {
+                const isDownloading = downloadingDocId === doc.id;
+                return (
+                  <Card key={doc.id} className="border-border/60 p-4 bg-card/80 flex items-center justify-between hover:border-primary/40 transition-colors">
+                    <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-xs text-foreground truncate" title={doc.file_name}>
+                          {doc.file_name}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">{formatRelativeTime(doc.created_at)}</p>
+                      </div>
                     </div>
-                  </div>
-                  <Button size="sm" variant="ghost" className="h-8 w-8 rounded-xl shrink-0" title="Tải tài liệu">
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </Card>
-              ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDownloadDocument(doc)}
+                      disabled={isDownloading}
+                      className="h-8 px-2.5 rounded-xl shrink-0 gap-1 text-xs"
+                      title="Tải tệp tài liệu xuống máy tính"
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                      ) : (
+                        <>
+                          <Download className="h-3.5 w-3.5" /> Tải
+                        </>
+                      )}
+                    </Button>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
       {/* ========================================================= */}
-      {/* 6. TAB: IMAGES (WITH LIGHTBOX INTEGRATION)                 */}
+      {/* 7. TAB: IMAGES (WITH LIGHTBOX VIEWER)                     */}
       {/* ========================================================= */}
       {activeTab === 'images' && (
         <div className="space-y-4 animate-in fade-in duration-200">
@@ -744,45 +1348,33 @@ export default function CommunityPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-              {images.map((img) => (
-                <div
-                  key={img.id}
-                  onClick={() => setLightboxImage(img.file_path)}
-                  className="relative rounded-2xl overflow-hidden aspect-video border border-border/60 bg-muted/40 cursor-pointer group hover:border-primary/50"
-                  title="Nhấp để xem toàn màn hình & phóng to"
-                >
-                  <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-                    Ảnh đính kèm
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+              {images.map((img) => {
+                const imgUrl = imageUrlsMap[img.id] || img.file_path;
+                return (
+                  <div
+                    key={img.id}
+                    onClick={() => setLightboxImage(imgUrl)}
+                    className="relative rounded-2xl overflow-hidden aspect-video border border-border/60 bg-muted/40 cursor-pointer group hover:border-primary/50 hover:shadow-md transition-all"
+                    title="Nhấp để xem ảnh phóng to & toàn màn hình"
+                  >
+                    <img
+                      src={imgUrl}
+                      alt={img.file_name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
+                      <p className="text-[11px] text-white truncate font-medium">{img.file_name}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* 7. TAB: CHAT & 8. ACTIVITY                                */}
-      {/* ========================================================= */}
-      {activeTab === 'chat' && (
-        <Card className="border-border/60 p-12 text-center space-y-3 animate-in fade-in duration-200">
-          <MessageCircle className="h-10 w-10 text-primary mx-auto" />
-          <h3 className="font-bold text-base">Phòng chat trao đổi trực tiếp</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Hỗ trợ kết nối bạn học cùng sở thích và trò chuyện riêng trong các nhóm học tập.
-          </p>
-        </Card>
-      )}
-
-      {activeTab === 'activity' && (
-        <Card className="border-border/60 p-12 text-center space-y-3 animate-in fade-in duration-200">
-          <Activity className="h-10 w-10 text-emerald-500 mx-auto" />
-          <h3 className="font-bold text-base">Nhật ký hoạt động cộng đồng</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            Hiển thị chuỗi ngày rèn luyện, hoàn thành thử thách và mốc điểm số mới của bạn bè trong hệ thống.
-          </p>
-        </Card>
       )}
 
       {/* ========================================================= */}
@@ -797,24 +1389,48 @@ export default function CommunityPage() {
           <form onSubmit={handleCreateCommunity} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="commName">Tên cộng đồng *</Label>
-              <Input id="commName" value={commName} onChange={(e) => setCommName(e.target.value)} placeholder="VD: Ôn thi Đại học môn Toán, IELTS Speaking Club..." required maxLength={60} />
+              <Input
+                id="commName"
+                value={commName}
+                onChange={(e) => setCommName(e.target.value)}
+                placeholder="VD: Ôn thi Đại học môn Toán, IELTS Speaking Club..."
+                required
+                maxLength={60}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="commDesc">Mô tả *</Label>
-              <Textarea id="commDesc" value={commDescription} onChange={(e) => setCommDescription(e.target.value)} placeholder="Cộng đồng này dành cho ai và có những hoạt động gì?" required rows={3} maxLength={500} />
+              <Textarea
+                id="commDesc"
+                value={commDescription}
+                onChange={(e) => setCommDescription(e.target.value)}
+                placeholder="Cộng đồng này dành cho ai và có những hoạt động gì?"
+                required
+                rows={3}
+                maxLength={500}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Biểu tượng (Icon)</Label>
               <div className="flex flex-wrap gap-2">
                 {EMOJI_OPTIONS.map((emoji) => (
-                  <button key={emoji} type="button" onClick={() => setCommIcon(emoji)} className={`h-10 w-10 rounded-xl text-xl transition-all ${commIcon === emoji ? 'bg-primary/20 ring-2 ring-primary' : 'bg-muted hover:bg-muted/80'}`}>
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setCommIcon(emoji)}
+                    className={`h-10 w-10 rounded-xl text-xl transition-all ${
+                      commIcon === emoji ? 'bg-primary/20 ring-2 ring-primary' : 'bg-muted hover:bg-muted/80'
+                    }`}
+                  >
                     {emoji}
                   </button>
                 ))}
               </div>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreateCommunity(false)}>Hủy</Button>
+              <Button type="button" variant="outline" onClick={() => setShowCreateCommunity(false)}>
+                Hủy
+              </Button>
               <Button type="submit" disabled={creatingCommunity || !commName.trim() || !commDescription.trim()}>
                 {creatingCommunity ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tạo ngay'}
               </Button>
@@ -835,7 +1451,13 @@ export default function CommunityPage() {
           <form onSubmit={handleCreateForumPost} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="postTitle">Tiêu đề thảo luận *</Label>
-              <Input id="postTitle" value={forumPostTitle} onChange={(e) => setForumPostTitle(e.target.value)} placeholder="Tóm tắt nội dung câu hỏi hoặc bài chia sẻ..." required />
+              <Input
+                id="postTitle"
+                value={forumPostTitle}
+                onChange={(e) => setForumPostTitle(e.target.value)}
+                placeholder="Tóm tắt nội dung câu hỏi hoặc bài chia sẻ..."
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="postCategory">Chuyên mục Diễn đàn</Label>
@@ -854,16 +1476,31 @@ export default function CommunityPage() {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="postContent">Nội dung chi tiết *</Label>
-              <Textarea id="postContent" value={forumPostContent} onChange={(e) => setForumPostContent(e.target.value)} placeholder="Viết nội dung thảo luận..." rows={5} required />
+              <Textarea
+                id="postContent"
+                value={forumPostContent}
+                onChange={(e) => setForumPostContent(e.target.value)}
+                placeholder="Viết nội dung thảo luận..."
+                rows={5}
+                required
+              />
             </div>
             <div className="flex items-center gap-2">
-              <input type="checkbox" id="anonCheck" checked={forumPostAnonymous} onChange={(e) => setForumPostAnonymous(e.target.checked)} className="rounded border-input text-primary" />
+              <input
+                type="checkbox"
+                id="anonCheck"
+                checked={forumPostAnonymous}
+                onChange={(e) => setForumPostAnonymous(e.target.checked)}
+                className="rounded border-input text-primary"
+              />
               <Label htmlFor="anonCheck" className="text-xs text-muted-foreground cursor-pointer">
                 Đăng ẩn danh (không hiển thị tên cá nhân của bạn)
               </Label>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreateForumPost(false)}>Hủy</Button>
+              <Button type="button" variant="outline" onClick={() => setShowCreateForumPost(false)}>
+                Hủy
+              </Button>
               <Button type="submit" disabled={creatingForumPost || !forumPostTitle.trim() || !forumPostContent.trim()}>
                 {creatingForumPost ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Đăng bài'}
               </Button>
@@ -884,20 +1521,131 @@ export default function CommunityPage() {
           <form onSubmit={handleCreateStudyGroup} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="grpName">Tên nhóm *</Label>
-              <Input id="grpName" value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="VD: Nhóm Luyện Đề Lý 12, Team Học IELTS 8.0..." required />
+              <Input
+                id="grpName"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="VD: Nhóm Luyện Đề Lý 12, Team Học IELTS 8.0..."
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="grpSubject">Môn học / Lĩnh vực</Label>
-              <Input id="grpSubject" value={groupSubject} onChange={(e) => setGroupSubject(e.target.value)} placeholder="Toán, Vật lý, Tiếng Anh, Tin học..." required />
+              <Input
+                id="grpSubject"
+                value={groupSubject}
+                onChange={(e) => setGroupSubject(e.target.value)}
+                placeholder="Toán, Vật lý, Tiếng Anh, Tin học..."
+                required
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="grpDesc">Mục tiêu & Quy chế nhóm</Label>
-              <Textarea id="grpDesc" value={groupDescription} onChange={(e) => setGroupDescription(e.target.value)} placeholder="Kế hoạch ôn thi, lịch họp nhóm..." rows={3} />
+              <Textarea
+                id="grpDesc"
+                value={groupDescription}
+                onChange={(e) => setGroupDescription(e.target.value)}
+                placeholder="Kế hoạch ôn thi, lịch họp nhóm..."
+                rows={3}
+              />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowCreateGroup(false)}>Hủy</Button>
+              <Button type="button" variant="outline" onClick={() => setShowCreateGroup(false)}>
+                Hủy
+              </Button>
               <Button type="submit" disabled={creatingGroup || !groupName.trim()}>
                 {creatingGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tạo nhóm'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================= */}
+      {/* DIALOG 4: CREATE CHAT ROOM                                */}
+      {/* ========================================================= */}
+      <Dialog open={showCreateChatRoom} onOpenChange={setShowCreateChatRoom}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Tạo Phòng chat mới</DialogTitle>
+            <DialogDescription>Mở phòng trò chuyện nhóm cho lớp học, đề thi hoặc câu lạc bộ.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateChatRoom} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="chatRoomName">Tên phòng chat *</Label>
+              <Input
+                id="chatRoomName"
+                value={chatRoomName}
+                onChange={(e) => setChatRoomName(e.target.value)}
+                placeholder="VD: Phòng Học Toán 11, Luyện Speaking Nhóm 3..."
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="chatRoomSubject">Môn học / Chủ đề</Label>
+              <Input
+                id="chatRoomSubject"
+                value={chatRoomSubject}
+                onChange={(e) => setChatRoomSubject(e.target.value)}
+                placeholder="Toán, Tiếng Anh, Lập trình..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="chatRoomDesc">Mô tả phòng</Label>
+              <Input
+                id="chatRoomDesc"
+                value={chatRoomDesc}
+                onChange={(e) => setChatRoomDesc(e.target.value)}
+                placeholder="Mô tả mục đích trao đổi..."
+              />
+            </div>
+
+            {/* Invite Friends section */}
+            {friends.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <Label className="text-xs font-semibold text-muted-foreground">Mời bạn bè vào phòng (Tùy chọn):</Label>
+                <div className="max-h-32 overflow-y-auto space-y-1 p-2 rounded-xl bg-muted/40 border border-border/40 scrollbar-thin">
+                  {friends.map((fr) => {
+                    const isSelected = selectedFriendIds.includes(fr.id);
+                    return (
+                      <label
+                        key={fr.id}
+                        className="flex items-center justify-between p-1.5 rounded-lg hover:bg-background/80 cursor-pointer text-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate">
+                          <Avatar className="h-6 w-6">
+                            {fr.avatar_url && <AvatarImage src={fr.avatar_url} />}
+                            <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                              {initials(getDisplayName(fr))}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium truncate">{getDisplayName(fr)}</span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedFriendIds([...selectedFriendIds, fr.id]);
+                            } else {
+                              setSelectedFriendIds(selectedFriendIds.filter((id) => id !== fr.id));
+                            }
+                          }}
+                          className="rounded text-primary"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowCreateChatRoom(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" disabled={creatingChatRoom || !chatRoomName.trim()} className="bg-primary text-primary-foreground">
+                {creatingChatRoom ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tạo phòng'}
               </Button>
             </DialogFooter>
           </form>
