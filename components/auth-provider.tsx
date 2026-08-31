@@ -44,12 +44,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<UserRole | null>(null);
   const resolvedRef = useRef(false);
 
-  const loadProfile = useCallback(async (uid: string) => {
-    const { data: p } = await supabase
+  const loadProfile = useCallback(async (uid: string, currentUser?: User | null) => {
+    let { data: p } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', uid)
       .maybeSingle();
+
+    if (!p && currentUser) {
+      const meta = currentUser.user_metadata || {};
+      const generatedUsername =
+        meta.user_name ||
+        (currentUser.email ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') : `user_${uid.slice(0, 6)}`);
+      const displayName = meta.full_name || meta.name || generatedUsername;
+
+      const { data: newProfile } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: uid,
+            username: generatedUsername,
+            display_name: displayName,
+            full_name: displayName,
+            avatar_url: meta.avatar_url || meta.picture || null,
+            verification_status: 'basic',
+          },
+          { onConflict: 'id' }
+        )
+        .select()
+        .maybeSingle();
+
+      p = newProfile;
+    }
+
     setProfile(p as Profile | null);
 
     const { data: r } = await supabase
@@ -66,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resolvedRef.current = true;
         setSession(data.session);
         setUser(data.session.user ?? null);
-        loadProfile(data.session.user.id).finally(() => setLoading(false));
+        loadProfile(data.session.user.id, data.session.user).finally(() => setLoading(false));
       } else {
         // getSession returned null. If a session still exists in localStorage,
         // the token refresh failed transiently but auth-js did NOT remove the
@@ -124,7 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(newSession);
       setUser(newSession?.user ?? null);
       if (newSession?.user) {
-        loadProfile(newSession.user.id);
+        loadProfile(newSession.user.id, newSession.user);
       }
       setLoading(false);
     });
@@ -142,7 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    if (user) await loadProfile(user.id);
+    if (user) await loadProfile(user.id, user);
   }, [user, loadProfile]);
 
   return (
