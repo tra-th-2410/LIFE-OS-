@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertCircle, ArrowLeft, Loader2, Mail, CheckCircle2, RotateCcw } from 'lucide-react';
+import { getAuthCallbackUrl } from '@/lib/helpers';
 import { toast } from 'sonner';
 
 export default function SignupPage() {
@@ -60,7 +61,7 @@ export default function SignupPage() {
             display_name: fullName.trim(),
             full_name: fullName.trim(),
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getAuthCallbackUrl(),
         },
       });
 
@@ -107,7 +108,7 @@ export default function SignupPage() {
         type: 'signup',
         email: emailSentTo,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getAuthCallbackUrl(),
         },
       });
       if (resendErr) throw resendErr;
@@ -125,7 +126,7 @@ export default function SignupPage() {
       const { error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getAuthCallbackUrl(),
         },
       });
       if (oauthErr) throw oauthErr;

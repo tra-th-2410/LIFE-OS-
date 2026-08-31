@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { AlertCircle, ArrowLeft, Loader2, Mail, RotateCcw } from 'lucide-react';
+import { getAuthCallbackUrl } from '@/lib/helpers';
 import { toast } from 'sonner';
 
 const REMEMBERED_EMAIL_KEY = 'lifeos-remembered-email';
@@ -90,7 +91,7 @@ export default function LoginPage() {
         type: 'signup',
         email: email.trim(),
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: getAuthCallbackUrl(),
         },
       });
       if (resendErr) throw resendErr;
@@ -108,7 +109,7 @@ export default function LoginPage() {
       const { error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getAuthCallbackUrl(),
         },
       });
       if (oauthErr) throw oauthErr;

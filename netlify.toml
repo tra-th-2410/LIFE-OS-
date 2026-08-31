@@ -4,6 +4,7 @@ publish = ".next"
 
 [build.environment]
 NODE_VERSION = "20"
+NEXT_PUBLIC_SITE_URL = "https://bejewelled-froyo-d5b8de.netlify.app"
 
 [[plugins]]
 package = "@netlify/plugin-nextjs"

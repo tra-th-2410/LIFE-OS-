@@ -137,3 +137,46 @@ export function calculateHabitStreak(completedDates: string[]): number {
   return streak;
 }
 
+/**
+ * Resolves the primary site URL dynamically and safely for both
+ * local development (localhost) and production (Netlify / custom domain).
+ */
+export function getSiteUrl(): string {
+  // 1. Explicit env configuration (e.g. from NEXT_PUBLIC_SITE_URL or NEXT_PUBLIC_URL)
+  const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim().replace(/\/+$/, '');
+  }
+
+  // 2. Client-side browser resolution
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    // If running in development on localhost/127.0.0.1
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return window.location.origin;
+    }
+    // If running in production browser
+    if (window.location.origin && !window.location.origin.includes('localhost')) {
+      return window.location.origin;
+    }
+  }
+
+  // 3. Production fallback (Netlify URL)
+  return 'https://bejewelled-froyo-d5b8de.netlify.app';
+}
+
+/**
+ * Returns the absolute redirect URL for Supabase Auth callback.
+ */
+export function getAuthCallbackUrl(): string {
+  return `${getSiteUrl()}/auth/callback`;
+}
+
+/**
+ * Returns the absolute redirect URL for password reset.
+ */
+export function getResetPasswordUrl(): string {
+  return `${getSiteUrl()}/reset-password`;
+}
+
+
