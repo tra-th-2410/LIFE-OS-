@@ -18,34 +18,50 @@ import {
 import { AI_BOTS } from '@/lib/ai';
 
 export default function AiCenterPage() {
-  const specializedBots = [
+  const specialists = [
     {
       key: 'learning' as const,
-      icon: <GraduationCap className="h-7 w-7 text-blue-500" />,
-      cta: 'Start Learning',
+      name: 'Learning AI',
+      icon: <GraduationCap className="h-6 w-6 text-blue-500" />,
+      tagline: 'Learn • Understand • Practice',
+      description: 'Giải thích khái niệm, gợi ý giải bài tập từng bước theo phương pháp Socratic, tạo câu hỏi quiz luyện tập và flashcards.',
+      cta: 'Open →',
+      borderHover: 'hover:border-blue-500/40 hover:shadow-blue-500/5',
       badgeColor: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
-      gradient: 'hover:border-blue-500/40 hover:shadow-blue-500/5',
+      bullets: ['Learn', 'Understand', 'Practice'],
     },
     {
       key: 'writing' as const,
-      icon: <PenTool className="h-7 w-7 text-emerald-500" />,
-      cta: 'Start Writing',
+      name: 'Writing AI',
+      icon: <PenTool className="h-6 w-6 text-emerald-500" />,
+      tagline: 'Write • Improve • Communicate',
+      description: 'Luyện thi IELTS Writing & Speaking, sửa lỗi ngữ pháp kèm giải thích lý do, nâng cao từ vựng và văn phong học thuật.',
+      cta: 'Open →',
+      borderHover: 'hover:border-emerald-500/40 hover:shadow-emerald-500/5',
       badgeColor: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
-      gradient: 'hover:border-emerald-500/40 hover:shadow-emerald-500/5',
+      bullets: ['Write', 'Improve', 'Communicate'],
     },
     {
       key: 'project' as const,
-      icon: <Rocket className="h-7 w-7 text-amber-500" />,
-      cta: 'Start Project',
+      name: 'Project AI',
+      icon: <Rocket className="h-6 w-6 text-amber-500" />,
+      tagline: 'Create • Build • Present',
+      description: 'Cố vấn dự án STEM, nghiên cứu khoa học, lập timeline, phân rã nhiệm vụ và chuẩn bị câu hỏi phản biện của giám khảo.',
+      cta: 'Open →',
+      borderHover: 'hover:border-amber-500/40 hover:shadow-amber-500/5',
       badgeColor: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20',
-      gradient: 'hover:border-amber-500/40 hover:shadow-amber-500/5',
+      bullets: ['Create', 'Build', 'Present'],
     },
     {
       key: 'career' as const,
-      icon: <Compass className="h-7 w-7 text-teal-500" />,
-      cta: 'Explore Careers',
+      name: 'Career AI',
+      icon: <Compass className="h-6 w-6 text-teal-500" />,
+      tagline: 'Discover • Explore • Plan',
+      description: 'Khám phá ngành học đại học, so sánh các ngành nghề, định hướng lộ trình học bổng và luyện phỏng vấn 1-1.',
+      cta: 'Open →',
+      borderHover: 'hover:border-teal-500/40 hover:shadow-teal-500/5',
       badgeColor: 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20',
-      gradient: 'hover:border-teal-500/40 hover:shadow-teal-500/5',
+      bullets: ['Discover', 'Explore', 'Plan'],
     },
   ];
 
@@ -53,7 +69,7 @@ export default function AiCenterPage() {
     <div className="max-w-5xl mx-auto space-y-8 pb-12">
       {/* Page Header */}
       <div className="flex flex-col gap-2 border-b border-border/50 pb-5">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span className="text-3xl">🤖</span>
           <h1 className="text-2xl sm:text-3xl font-display font-bold tracking-tight">
             AI Center
@@ -66,9 +82,9 @@ export default function AiCenterPage() {
 
       {/* Featured Primary AI: Study Coach AI */}
       <div className="relative group">
-        <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/60 via-purple-500/50 to-blue-500/60 rounded-3xl blur-md opacity-30 group-hover:opacity-60 transition duration-500" />
-        
-        <Card className="relative border-primary/30 bg-gradient-to-br from-primary/10 via-card to-background rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300">
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 via-purple-500/40 to-blue-500/50 rounded-3xl blur-md opacity-30 group-hover:opacity-60 transition duration-500" />
+
+        <Card className="relative border-primary/30 bg-gradient-to-br from-primary/10 via-card to-background rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-all duration-300">
           <CardContent className="p-6 sm:p-8">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               <div className="space-y-4 max-w-2xl">
@@ -77,8 +93,8 @@ export default function AiCenterPage() {
                   <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground">
                     Study Coach AI
                   </h2>
-                  <Badge className="bg-primary text-primary-foreground font-semibold px-2.5 py-0.5 shadow-sm text-xs">
-                    <Sparkles className="h-3 w-3 mr-1" /> AI Trung tâm
+                  <Badge className="bg-primary/15 text-primary border-primary/30 font-semibold px-2.5 py-0.5 text-xs">
+                    <Sparkles className="h-3 w-3 mr-1" /> Plan • Focus • Progress
                   </Badge>
                 </div>
 
@@ -87,8 +103,7 @@ export default function AiCenterPage() {
                 </p>
 
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Được thiết kế để trở thành bộ não điều phối học tập của Life OS: tự động phân tích dữ liệu 
-                  <strong> Weakness Map</strong>, kết nối <strong>Smart Calendar</strong>, đề xuất thời lượng ôn tập tối ưu và điều chỉnh kế hoạch dựa trên tiến độ học tập thực tế của bạn.
+                  AI trung tâm có khả năng sử dụng context từ Life OS (<strong>Weakness Map</strong>, <strong>Smart Calendar</strong>, <strong>Study Progress</strong>, <strong>Gamification</strong>, <strong>Study History</strong>) để phân tích năng lực, đề xuất lịch học và tối ưu tiến độ học tập của bạn.
                 </p>
 
                 <div className="flex flex-wrap gap-2 pt-1">
@@ -116,11 +131,11 @@ export default function AiCenterPage() {
         </Card>
       </div>
 
-      {/* 4 Specialized AI Assistants Grid */}
+      {/* 4 Specialized AI Assistants Section */}
       <div className="space-y-4 pt-2">
         <div>
-          <h2 className="text-lg sm:text-xl font-display font-bold">
-            Trợ lý AI chuyên biệt
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-foreground">
+            Your AI Specialists
           </h2>
           <p className="text-sm text-muted-foreground">
             Các trợ lý chuyên sâu hỗ trợ từng mục tiêu và kỹ năng cụ thể.
@@ -128,27 +143,26 @@ export default function AiCenterPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          {specializedBots.map(({ key, icon, cta, badgeColor, gradient }) => {
-            const bot = AI_BOTS[key];
-            if (!bot) return null;
+          {specialists.map((bot) => {
+            const botConfig = AI_BOTS[bot.key];
 
             return (
               <Card
-                key={key}
-                className={`group relative flex flex-col justify-between border-border/60 bg-card hover:shadow-lg transition-all duration-300 ${gradient}`}
+                key={bot.key}
+                className={`group relative flex flex-col justify-between border-border/60 bg-card hover:shadow-lg transition-all duration-300 ${bot.borderHover}`}
               >
                 <CardContent className="p-6 space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3.5">
-                      <div className="p-3 rounded-2xl bg-muted/60 border border-border/40 shadow-xs">
-                        {icon}
+                      <div className="p-2.5 rounded-2xl bg-muted/60 border border-border/40 shadow-xs">
+                        {bot.icon}
                       </div>
                       <div>
                         <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
                           {bot.name}
                         </h3>
-                        <Badge variant="outline" className={`mt-0.5 text-xs font-semibold ${badgeColor}`}>
-                          {bot.flow}
+                        <Badge variant="outline" className={`mt-0.5 text-xs font-semibold ${bot.badgeColor}`}>
+                          {bot.tagline}
                         </Badge>
                       </div>
                     </div>
@@ -158,25 +172,38 @@ export default function AiCenterPage() {
                     {bot.description}
                   </p>
 
-                  <div className="space-y-1.5 pt-1">
-                    <p className="text-xs font-semibold text-muted-foreground/80 uppercase tracking-wider">
-                      Gợi ý câu hỏi:
-                    </p>
-                    {bot.suggestions.slice(0, 3).map((s) => (
-                      <div
-                        key={s}
-                        className="text-xs text-muted-foreground/90 pl-2.5 py-0.5 border-l-2 border-primary/30 line-clamp-1"
+                  {/* Flow Pills */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {bot.bullets.map((b, i) => (
+                      <span
+                        key={b}
+                        className="text-xs bg-muted/50 text-muted-foreground px-2.5 py-0.5 rounded-md border border-border/40 font-medium"
                       >
-                        {s}
-                      </div>
+                        {b}
+                      </span>
                     ))}
                   </div>
+
+                  {/* Suggestions sample */}
+                  {botConfig && (
+                    <div className="space-y-1 pt-1 border-t border-border/40">
+                      <p className="text-[11px] font-semibold text-muted-foreground/80 uppercase tracking-wider">
+                        Gợi ý:
+                      </p>
+                      <p className="text-xs text-muted-foreground/90 truncate">
+                        "{botConfig.suggestions[0]}"
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
 
                 <div className="p-6 pt-0 mt-auto">
-                  <Link href={`/app/ai/${key}`}>
-                    <Button variant="outline" className="w-full justify-between font-medium group-hover:border-primary/50 group-hover:text-primary transition-all">
-                      <span>{cta}</span>
+                  <Link href={`/app/ai/${bot.key}`}>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between font-medium group-hover:border-primary/50 group-hover:text-primary transition-all"
+                    >
+                      <span>{bot.cta}</span>
                       <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1 transition-transform" />
                     </Button>
                   </Link>

@@ -356,19 +356,32 @@ export default function AiChatPage() {
   return (
     <div className="max-w-3xl mx-auto h-[calc(100vh-8rem)] lg:h-[calc(100vh-10rem)] flex flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 pb-4 border-b border-border/60">
-        <Link href="/app/ai" className="p-2 -ml-2 hover:bg-muted rounded-lg transition-colors">
-          <ArrowLeft className="h-4 w-4" />
+      <div className="flex items-center justify-between gap-3 pb-4 border-b border-border/60">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/app/ai"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground font-medium p-1.5 -ml-1.5 hover:bg-muted rounded-lg transition-colors"
+            title="Back to AI Center"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="hidden sm:inline">AI Center</span>
+          </Link>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-xl shrink-0">
+            {bot.icon}
+          </div>
+          <div>
+            <h1 className="font-semibold text-base sm:text-lg">{bot.name}</h1>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <Sparkles className="h-3 w-3" /> {bot.flow}
+            </p>
+          </div>
+        </div>
+
+        <Link href="/app/ai">
+          <Button variant="ghost" size="sm" className="text-xs text-muted-foreground">
+            Back to AI Center
+          </Button>
         </Link>
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-xl">
-          {bot.icon}
-        </div>
-        <div>
-          <h1 className="font-semibold">{bot.name}</h1>
-          <p className="text-xs text-muted-foreground flex items-center gap-1">
-            <Sparkles className="h-3 w-3" /> AI Assistant
-          </p>
-        </div>
       </div>
 
       {/* Messages */}

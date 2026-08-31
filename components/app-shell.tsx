@@ -40,7 +40,7 @@ const navItems = [
   { href: '/app/study', label: 'Study', icon: BookOpen },
   { href: '/app/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/app/notifications', label: 'Notifications', icon: Bell },
-  { href: '/app/study-coach', label: 'Study Coach', icon: Bot },
+  { href: '/app/ai', label: 'AI Center', icon: Bot },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -132,6 +132,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const isActive = (href: string) => {
     if (href === '/app') return pathname === '/app';
+    if (href === '/app/ai') return pathname.startsWith('/app/ai') || pathname.startsWith('/app/study-coach');
     return pathname.startsWith(href);
   };
 

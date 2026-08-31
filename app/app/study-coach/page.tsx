@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Lightbulb,
   ArrowRight,
+  ArrowLeft,
   TrendingUp,
   RotateCcw,
   PlusCircle,
@@ -297,8 +298,8 @@ export default function StudyCoachPage() {
 
         <div className="flex items-center gap-2">
           <Link href="/app/ai">
-            <Button variant="outline" size="sm">
-              Xem tất cả AI (AI Center)
+            <Button variant="outline" size="sm" className="gap-1.5 font-medium">
+              <ArrowLeft className="h-4 w-4" /> Back to AI Center
             </Button>
           </Link>
           <Button variant="ghost" size="sm" onClick={loadContext} disabled={loadingContext}>
