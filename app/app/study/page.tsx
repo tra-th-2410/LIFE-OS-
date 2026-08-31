@@ -33,12 +33,18 @@ import {
   GraduationCap,
   Brain,
   Edit3,
+  TrendingUp,
+  Clock,
+  Target,
 } from 'lucide-react';
 import type { Challenge, ChallengeParticipant, ChallengeCheckin, ChallengeCategory, StudySet, QuestionType } from '@/lib/types';
 import { fetchStudySets, createStudySet, updateStudySet, deleteStudySet, createStudyQuestionsBatch, STUDY_SUBJECTS } from '@/lib/study';
 import { StudySetCard } from '@/components/study/study-set-card';
 import { SetDialog } from '@/components/study/set-dialog';
 import { AiCreateSetDialog } from '@/components/study/ai-create-set-dialog';
+import { StudyProgressView } from '@/components/study/study-progress-view';
+import { StudyLibraryView } from '@/components/study/study-library-view';
+import { FocusModeDialog } from '@/components/study/focus-mode-dialog';
 import { toast } from 'sonner';
 
 const CATEGORIES: { value: ChallengeCategory; label: string }[] = [
@@ -113,8 +119,9 @@ export default function StudyPage() {
 
   const router = useRouter();
 
-  // Top-level Section Switcher: 'quiz' | 'challenges'
-  const [mainSection, setMainSection] = useState<'quiz' | 'challenges'>('quiz');
+  // Top-level Section Switcher: 'quiz' | 'library' | 'progress' | 'challenges'
+  const [mainSection, setMainSection] = useState<'quiz' | 'library' | 'progress' | 'challenges'>('quiz');
+  const [showFocusMode, setShowFocusMode] = useState(false);
 
   // Quiz / Flashcard State
   const [studySets, setStudySets] = useState<StudySet[]>([]);
@@ -494,30 +501,61 @@ export default function StudyPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       {/* Top Level Section Navigation Pills */}
-      <div className="flex items-center justify-between pb-1">
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/60 border border-border/60">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/60 border border-border/60 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setMainSection('quiz')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
               mainSection === 'quiz'
                 ? 'bg-background text-primary shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <GraduationCap className="h-4 w-4" /> Bộ câu hỏi & Flashcards ({studySets.length})
+            <GraduationCap className="h-4 w-4" /> Quiz & Flashcards ({studySets.length})
+          </button>
+
+          <button
+            onClick={() => setMainSection('library')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
+              mainSection === 'library'
+                ? 'bg-background text-primary shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <BookOpen className="h-4 w-4" /> Thư viện tài liệu
+          </button>
+
+          <button
+            onClick={() => setMainSection('progress')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
+              mainSection === 'progress'
+                ? 'bg-background text-primary shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <TrendingUp className="h-4 w-4 text-emerald-500" /> My Progress
           </button>
 
           <button
             onClick={() => setMainSection('challenges')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all shrink-0 ${
               mainSection === 'challenges'
                 ? 'bg-background text-primary shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Flame className="h-4 w-4" /> Thử thách học tập ({myChallenges.length})
+            <Flame className="h-4 w-4 text-orange-500" /> Thử thách ({myChallenges.length})
           </button>
         </div>
+
+        {/* Focus Mode Quick Action */}
+        <Button
+          onClick={() => setShowFocusMode(true)}
+          variant="outline"
+          className="gap-2 rounded-xl border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs shadow-xs shrink-0 self-start sm:self-auto"
+        >
+          <Clock className="h-4 w-4 text-primary" /> Focus Mode (Pomodoro)
+        </Button>
       </div>
 
       {/* ==================================================== */}
@@ -881,6 +919,16 @@ export default function StudyPage() {
         </div>
       )}
 
+      {/* ==================================================== */}
+      {/* SECTION 3: STUDY LIBRARY                             */}
+      {/* ==================================================== */}
+      {mainSection === 'library' && <StudyLibraryView />}
+
+      {/* ==================================================== */}
+      {/* SECTION 4: MY PROGRESS & WEAKNESS MAP                */}
+      {/* ==================================================== */}
+      {mainSection === 'progress' && <StudyProgressView />}
+
       {/* Manual Set Create/Edit Dialog */}
       <SetDialog
         open={isCreateSetOpen}
@@ -894,6 +942,12 @@ export default function StudyPage() {
         open={isAiCreateSetOpen}
         onOpenChange={setIsAiCreateSetOpen}
         onSuccess={handleAiSetSuccess}
+      />
+
+      {/* Focus Mode Dialog */}
+      <FocusModeDialog
+        open={showFocusMode}
+        onOpenChange={setShowFocusMode}
       />
     </div>
   );

@@ -37,8 +37,21 @@ export function slugify(text: string): string {
     .replace(/-+/g, '-');
 }
 
-export function initials(name: string): string {
+export function getDisplayName(
+  profile?: { display_name?: string | null; full_name?: string | null; username?: string | null } | null,
+  fallback = 'User'
+): string {
+  if (!profile) return fallback;
+  if (profile.display_name && profile.display_name.trim()) return profile.display_name.trim();
+  if (profile.full_name && profile.full_name.trim()) return profile.full_name.trim();
+  if (profile.username && profile.username.trim()) return profile.username.trim();
+  return fallback;
+}
+
+export function initials(name?: string | null): string {
+  if (!name || !name.trim()) return 'U';
   return name
+    .trim()
     .split(' ')
     .map((n) => n[0])
     .filter(Boolean)

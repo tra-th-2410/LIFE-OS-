@@ -41,12 +41,23 @@ export default function SignupPage() {
       if (signupError) throw signupError;
       if (!data.user) throw new Error('Unable to create your account.');
 
-      const { error: profileError } = await supabase.from('profiles').insert({
+      let { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
         username: username.trim(),
+        display_name: fullName.trim(),
         full_name: fullName.trim(),
         verification_status: 'basic',
       });
+      if (profileError && (profileError.message?.includes('display_name') || profileError.code === '42703')) {
+        // Fallback if migration 030 is pending on remote Supabase instance
+        const fallbackRes = await supabase.from('profiles').insert({
+          id: data.user.id,
+          username: username.trim(),
+          full_name: fullName.trim(),
+          verification_status: 'basic',
+        });
+        profileError = fallbackRes.error;
+      }
       if (profileError) {
         if (profileError.code === '23505') throw new Error('That username is already taken.');
         throw profileError;

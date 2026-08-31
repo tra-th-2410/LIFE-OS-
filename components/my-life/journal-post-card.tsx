@@ -42,7 +42,8 @@ import {
   Check,
   Copy,
 } from 'lucide-react';
-import { formatRelativeTime, initials, moodEmoji, moodLabel } from '@/lib/helpers';
+import { formatRelativeTime, initials, moodEmoji, moodLabel, getDisplayName } from '@/lib/helpers';
+import { ImageLightbox } from '@/components/my-life/image-lightbox';
 import type {
   JournalEntryWithRelations,
   JournalPostComment,
@@ -77,6 +78,7 @@ export function JournalPostCard({
   const [loadingComments, setLoadingComments] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const isOwner = user?.id === post.user_id;
   const userReaction = reactions.find((r) => r.user_id === user?.id)?.reaction_type;
@@ -269,7 +271,8 @@ export function JournalPostCard({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const authorName = post.author?.username || 'Bạn học';
+  const authorName = getDisplayName(post.author, 'Bạn học');
+  const authorUsername = post.author?.username || '';
   const isVerified = post.author?.verification_status === 'verified';
 
   // Group reactions by emoji
@@ -284,8 +287,9 @@ export function JournalPostCard({
         {/* Post Header */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <Link href={`/app/profile/${authorName}`}>
+            <Link href={authorUsername ? `/app/profile/${authorUsername}` : '#'}>
               <Avatar className="h-10 w-10 border border-border/60 hover:ring-2 hover:ring-primary/30 transition-all">
+                {post.author?.avatar_url && <img src={post.author.avatar_url} alt={authorName} className="h-full w-full object-cover rounded-full" />}
                 <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
                   {initials(authorName)}
                 </AvatarFallback>
@@ -295,7 +299,7 @@ export function JournalPostCard({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <Link
-                  href={`/app/profile/${authorName}`}
+                  href={authorUsername ? `/app/profile/${authorUsername}` : '#'}
                   className="font-semibold text-sm hover:text-primary transition-colors"
                 >
                   {authorName}
@@ -387,7 +391,9 @@ export function JournalPostCard({
                   return (
                     <div
                       key={att.id}
-                      className="relative rounded-xl overflow-hidden border border-border/60 bg-muted/30 aspect-video max-h-48 group"
+                      onClick={() => url && setLightboxSrc(url)}
+                      className="relative rounded-xl overflow-hidden border border-border/60 bg-muted/30 aspect-video max-h-48 group cursor-pointer hover:border-primary/50 transition-colors"
+                      title="Nhấp để xem ảnh lớn & phóng to"
                     >
                       {url ? (
                         <img
@@ -614,6 +620,14 @@ export function JournalPostCard({
             </div>
           </DialogContent>
         </Dialog>
+        {/* Image Lightbox View (Full zoom / Pan / Fullscreen / Mobile pinch-to-zoom) */}
+        {lightboxSrc && (
+          <ImageLightbox
+            src={lightboxSrc}
+            alt={post.title || authorName}
+            onClose={() => setLightboxSrc(null)}
+          />
+        )}
       </CardContent>
     </Card>
   );

@@ -17,6 +17,7 @@ export type UserRole = 'user' | 'moderator' | 'admin' | 'super_admin';
 export interface Profile {
   id: string;
   username: string;
+  display_name?: string | null;
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
@@ -594,5 +595,218 @@ export interface ExamAnswerRecord {
   isCorrect: boolean;
   isFlagged: boolean;
   timeSpentSeconds?: number;
+}
+
+// ----------------------------------------------------
+// Smart Calendar & Recurring Events Types
+// ----------------------------------------------------
+
+export type CalendarEventStatus = 'todo' | 'in_progress' | 'completed' | 'missed';
+export type CalendarEventSource = 'manual' | 'ai_import' | 'ai_natural_language' | 'study_coach' | 'challenge' | 'weakness_review';
+
+export interface RecurrenceRule {
+  freq: 'daily' | 'weekly' | 'monthly' | 'custom';
+  interval?: number;
+  daysOfWeek?: number[]; // 0 for Sun, 1 for Mon, ..., 6 for Sat
+  dayOfMonth?: number;
+  until?: string; // YYYY-MM-DD
+  count?: number;
+}
+
+export interface SmartCalendarEvent {
+  id: string;
+  user_id: string;
+  title: string;
+  subject: string;
+  topic: string | null;
+  description: string;
+  date: string; // YYYY-MM-DD
+  start_time: string; // HH:MM:SS or HH:MM
+  end_time: string;   // HH:MM:SS or HH:MM
+  duration_minutes: number;
+  color: string;
+  category: string;
+  status: CalendarEventStatus;
+  is_recurring: boolean;
+  recurrence_rule: RecurrenceRule | null;
+  parent_event_id: string | null;
+  recurrence_series_id: string | null;
+  has_reminder: boolean;
+  reminder_minutes_before: number;
+  source: CalendarEventSource;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SmartCalendarReminder {
+  id: string;
+  event_id: string;
+  user_id: string;
+  reminder_time: string;
+  is_sent: boolean;
+  notification_id: string | null;
+  created_at: string;
+  event?: SmartCalendarEvent;
+}
+
+// ----------------------------------------------------
+// Weakness Map Topic Tracking
+// ----------------------------------------------------
+
+export interface StudyWeaknessTopic {
+  id: string;
+  user_id: string;
+  subject: string;
+  topic: string;
+  total_questions: number;
+  correct_questions: number;
+  mastery_score: number; // 0 - 100
+  last_assessed_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// ----------------------------------------------------
+// Gamification (XP, Level, Streak, Rewards)
+// ----------------------------------------------------
+
+export interface UserGamification {
+  user_id: string;
+  xp: number;
+  level: number;
+  streak_days: number;
+  last_active_date: string | null;
+  total_study_minutes: number;
+  total_questions_solved: number;
+  total_correct_questions: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type XpSourceType =
+  | 'quiz_completed'
+  | 'calendar_task_completed'
+  | 'challenge_completed'
+  | 'streak_milestone'
+  | 'study_set_created'
+  | 'flashcards_reviewed'
+  | 'focus_session_completed'
+  | 'community_activity';
+
+export interface XpLedgerEntry {
+  id: string;
+  user_id: string;
+  xp_amount: number;
+  source_type: XpSourceType;
+  source_id: string | null;
+  description: string;
+  created_at: string;
+}
+
+export type RewardType = 'pet' | 'plant' | 'room' | 'theme' | 'avatar_item' | 'garden';
+
+export interface UserReward {
+  id: string;
+  user_id: string;
+  reward_id: string;
+  reward_type: RewardType;
+  name: string;
+  icon: string;
+  level_required: number;
+  is_unlocked: boolean;
+  is_equipped: boolean;
+  unlocked_at: string | null;
+  created_at: string;
+}
+
+// ----------------------------------------------------
+// Focus Sessions (Pomodoro)
+// ----------------------------------------------------
+
+export type FocusPresetType = '25/5' | '30/5' | '45/10' | '60/10' | 'custom';
+
+export interface FocusSession {
+  id: string;
+  user_id: string;
+  task_id: string | null;
+  event_id: string | null;
+  subject: string;
+  duration_minutes: number;
+  preset_type: FocusPresetType;
+  status: 'completed' | 'cancelled';
+  xp_awarded: number;
+  notes: string | null;
+  created_at: string;
+}
+
+// ----------------------------------------------------
+// Study Library (Study Materials)
+// ----------------------------------------------------
+
+export interface StudyMaterial {
+  id: string;
+  user_id: string;
+  title: string;
+  subject: string;
+  topic: string | null;
+  file_name: string | null;
+  file_path: string | null;
+  file_type: string | null;
+  file_size: number;
+  content_summary: string | null;
+  ai_analysis: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ----------------------------------------------------
+// Study Groups in Community
+// ----------------------------------------------------
+
+export type StudyGroupRole = 'owner' | 'admin' | 'member';
+export type StudyGroupResourceType = 'document' | 'quiz' | 'challenge' | 'link';
+
+export interface StudyGroup {
+  id: string;
+  name: string;
+  slug: string;
+  avatar_url: string | null;
+  description: string;
+  subject: string;
+  creator_id: string | null;
+  members_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StudyGroupMember {
+  group_id: string;
+  user_id: string;
+  role: StudyGroupRole;
+  joined_at: string;
+  profile?: Profile;
+}
+
+export interface StudyGroupMessage {
+  id: string;
+  group_id: string;
+  sender_id: string;
+  content: string;
+  attachments: { name: string; url: string; type?: string }[];
+  created_at: string;
+  sender?: Profile;
+}
+
+export interface StudyGroupResource {
+  id: string;
+  group_id: string;
+  uploader_id: string;
+  title: string;
+  resource_type: StudyGroupResourceType;
+  resource_id: string | null;
+  file_url: string | null;
+  is_pinned: boolean;
+  created_at: string;
+  uploader?: Profile;
 }
 

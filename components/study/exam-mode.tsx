@@ -36,8 +36,13 @@ import { MultipleChoiceCard } from './multiple-choice-card';
 import { FillBlankCard } from './fill-blank-card';
 import { StudyRichText } from './study-rich-text';
 import { smartAnswerCompare, saveStudySession, getSubjectMeta, recordQuestionProgress } from '@/lib/study';
+import { recordQuizResultsToWeaknessMap, generateWeaknessRecommendations, type WeaknessRecommendation } from '@/lib/study-analytics';
+import { awardXP } from '@/lib/gamification';
+import { createCalendarEvent } from '@/lib/calendar';
 import type { StudySet, StudyQuestion } from '@/lib/types';
 import { useAuth } from '@/components/auth-provider';
+import { Sparkles, Calendar, TrendingUp } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface ExamModeProps {
   studySet: StudySet;
@@ -66,6 +71,38 @@ export function ExamMode({ studySet, allQuestions }: ExamModeProps) {
 
   // Results filter
   const [resultFilter, setResultFilter] = useState<'all' | 'wrong' | 'correct'>('all');
+  const [weaknessRecs, setWeaknessRecs] = useState<WeaknessRecommendation[]>([]);
+  const [addingToCalendar, setAddingToCalendar] = useState<Record<string, boolean>>({});
+
+  const handleAddWeaknessToCalendar = async (rec: WeaknessRecommendation) => {
+    if (!user || !rec.calendarProposal) return;
+    setAddingToCalendar((prev) => ({ ...prev, [rec.topic]: true }));
+    try {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const dateStr = tomorrow.toISOString().split('T')[0];
+
+      await createCalendarEvent(user.id, {
+        title: rec.calendarProposal.title,
+        subject: rec.subject,
+        topic: rec.topic,
+        date: dateStr,
+        start_time: '19:30',
+        end_time: '20:15',
+        duration_minutes: rec.calendarProposal.durationMinutes,
+        color: 'rose',
+        has_reminder: true,
+        reminder_minutes_before: 30,
+        source: 'weakness_review',
+      });
+
+      toast.success(`Đã thêm buổi ôn tập chủ đề "${rec.topic}" vào Lịch học ngày mai!`);
+    } catch {
+      toast.error('Không thể thêm vào Lịch');
+    } finally {
+      setAddingToCalendar((prev) => ({ ...prev, [rec.topic]: false }));
+    }
+  };
 
   // Start Exam
   const handleStartExam = () => {
@@ -196,6 +233,7 @@ export function ExamMode({ studySet, allQuestions }: ExamModeProps) {
     const finalScore = totalQ > 0 ? Number(((correct / totalQ) * 10).toFixed(1)) : 0;
 
     if (user) {
+      // 1. Save Study Session
       await saveStudySession({
         user_id: user.id,
         set_id: studySet.id,
@@ -208,8 +246,28 @@ export function ExamMode({ studySet, allQuestions }: ExamModeProps) {
         incorrect_answers: incorrect,
         score: finalScore,
       });
+
+      // 2. Update Weakness Map
+      const updatedTopics = await recordQuizResultsToWeaknessMap(
+        user.id,
+        studySet.subject,
+        examQuestions,
+        userAnswers
+      );
+      const recs = generateWeaknessRecommendations(updatedTopics);
+      setWeaknessRecs(recs);
+
+      // 3. Award XP for Exam Completion
+      const earnedXp = Math.max(10, Math.round(finalScore * 10));
+      await awardXP(
+        user.id,
+        earnedXp,
+        'quiz_completed',
+        `${studySet.id}-${Date.now()}`,
+        `Hoàn thành bài thi thử "${studySet.title}" (${finalScore}/10 điểm)`
+      );
     }
-  }, [examQuestions, userAnswers, sessionStartTime, user, studySet.id]);
+  }, [examQuestions, userAnswers, sessionStartTime, user, studySet.id, studySet.subject, studySet.title]);
 
   const currentQ = examQuestions[currentIndex];
 
@@ -370,6 +428,68 @@ export function ExamMode({ studySet, allQuestions }: ExamModeProps) {
             </div>
           </CardContent>
         </Card>
+
+        {/* WEAKNESS MAP INSIGHTS & AI RECOMMENDATIONS (Requirement VI) */}
+        {weaknessRecs.length > 0 && (
+          <Card className="border-border/80 bg-card/80 backdrop-blur-sm shadow-sm overflow-hidden animate-in fade-in">
+            <CardContent className="p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-foreground">Phân tích Weakness Map & Đề xuất hành động</h3>
+                  <p className="text-xs text-muted-foreground">Trợ lý AI tự động nhận diện chủ đề bạn còn yếu để bù đắp kiến thức.</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-1">
+                {weaknessRecs.map((rec) => (
+                  <div
+                    key={rec.topic}
+                    className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm text-foreground">{rec.topic}</span>
+                        <Badge variant="outline" className="text-[10px] text-rose-500 border-rose-500/30 bg-rose-500/10">
+                          {rec.masteryScore}% thành thạo
+                        </Badge>
+                      </div>
+
+                      {rec.calendarProposal && (
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddWeaknessToCalendar(rec)}
+                          disabled={addingToCalendar[rec.topic]}
+                          className="h-8 text-xs rounded-xl gap-1.5 font-medium shadow-xs"
+                        >
+                          <Calendar className="h-3.5 w-3.5" />
+                          {addingToCalendar[rec.topic] ? 'Đang thêm...' : 'Thêm vào Calendar'}
+                        </Button>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground leading-relaxed">{rec.message}</p>
+
+                    {/* Action Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                      {rec.actionCards.map((card, i) => (
+                        <div
+                          key={i}
+                          className="p-2.5 rounded-xl bg-card border border-border/60 text-xs flex items-center gap-2"
+                        >
+                          <span className="h-2 w-2 rounded-full bg-primary shrink-0" />
+                          <span className="font-medium text-foreground">{card.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Detailed Question Review Breakdown */}
         <div className="space-y-4">

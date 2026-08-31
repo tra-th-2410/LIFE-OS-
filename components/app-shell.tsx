@@ -20,6 +20,7 @@ import {
   Shield,
   MessageSquare,
   FileCheck,
+  CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -28,17 +29,18 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
-import { initials } from '@/lib/helpers';
+import { initials, getDisplayName } from '@/lib/helpers';
 import { toast } from 'sonner';
 
 const navItems = [
   { href: '/app', label: 'Home', icon: Home },
-  { href: '/app/community', label: 'Community', icon: Users },
-  { href: '/app/forum', label: 'Forum', icon: MessageSquare },
-  { href: '/app/study', label: 'Challenges', icon: BookOpen },
-  { href: '/app/projects', label: 'Projects', icon: Target },
+  { href: '/app/profile', label: 'Profile', icon: User },
   { href: '/app/my-life', label: 'My Life', icon: Heart },
-  { href: '/app/ai', label: 'AI', icon: Bot },
+  { href: '/app/community', label: 'Community', icon: Users },
+  { href: '/app/study', label: 'Study', icon: BookOpen },
+  { href: '/app/calendar', label: 'Calendar', icon: CalendarDays },
+  { href: '/app/notifications', label: 'Notifications', icon: Bell },
+  { href: '/app/study-coach', label: 'Study Coach', icon: Bot },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -230,8 +232,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <Link href={profile ? `/app/profile/${profile.username}` : '/app/profile'}>
               <Avatar className="h-9 w-9 border-2 border-transparent hover:border-primary/30 transition-colors">
+                {profile?.avatar_url && (
+                  <img src={profile.avatar_url} alt={getDisplayName(profile)} className="h-full w-full object-cover rounded-full" />
+                )}
                 <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
-                  {profile ? initials(profile.username) : 'U'}
+                  {initials(getDisplayName(profile))}
                 </AvatarFallback>
               </Avatar>
             </Link>
