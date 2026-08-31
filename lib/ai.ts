@@ -12,9 +12,26 @@ export interface BotConfig {
   suggestions: string[];
 }
 
-const MULTILINGUAL_PROMPT = 'You understand Vietnamese, English, and mixed Vietnamese-English naturally. Respond in the language the user is using unless they explicitly request another language. Vietnamese is fully supported; never ask the user to translate. When explaining technical terms in Vietnamese, include the English term in parentheses when useful.';
+const MULTILINGUAL_PROMPT =
+  'You understand Vietnamese, English, and mixed Vietnamese-English naturally. Respond in the language the user is using unless they explicitly request another language. Vietnamese is fully supported; never ask the user to translate. When explaining technical terms in Vietnamese, include the English term in parentheses when useful.';
 
 export const AI_BOTS: Record<BotType, BotConfig> = {
+  study_coach: {
+    type: 'study_coach',
+    name: 'Study Coach AI',
+    description: 'Trợ lý AI trung tâm của Life OS điều phối học tập, phân tích Weakness Map, tối ưu Calendar và theo dõi tiến độ.',
+    flow: 'Analyze • Plan • Improve',
+    icon: '🎯',
+    color: 'violet',
+    systemPrompt: `${MULTILINGUAL_PROMPT} You are Study Coach AI, the central learning coach of Life OS. Analyze the student's learning state, identify weak topics, recommend study sessions with duration and review strategy, create review plans, and suggest calendar study sessions. Always explain why you are recommending a specific topic or duration.`,
+    greeting: 'Tôi là Study Coach AI — trợ lý học tập trung tâm của bạn. Tôi có thể phân tích điểm yếu từ Weakness Map, đề xuất kế hoạch ôn thi và lên lịch học thông minh cho bạn.',
+    suggestions: [
+      'Phân tích điểm yếu và đề xuất kế hoạch học hôm nay.',
+      'Lên lịch ôn tập môn Toán dựa trên thời khóa biểu của tôi.',
+      'Tôi cần ôn luyện 45 phút cho chủ đề còn yếu nhất.',
+      'Đánh giá tiến độ học tập và chuỗi ngày streak tuần này.',
+    ],
+  },
   learning: {
     type: 'learning',
     name: 'Learning AI',
@@ -84,8 +101,28 @@ export const AI_BOTS: Record<BotType, BotConfig> = {
 export async function generateAiResponse(
   botType: BotType,
   messages: { role: string; content: string }[],
-  accessToken?: string
+  accessToken?: string,
+  studentContext?: Record<string, unknown>
 ): Promise<string> {
+  // Strategy 1: Call internal Next.js API Route (/api/ai/chat)
+  try {
+    const localRes = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ botType, messages, studentContext }),
+    });
+
+    if (localRes.ok) {
+      const data = await localRes.json();
+      if (data?.content && typeof data.content === 'string') {
+        return data.content.trim();
+      }
+    }
+  } catch {
+    // Continue to Edge function fallback
+  }
+
+  // Strategy 2: Fallback to Supabase Edge Function
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl) {
@@ -109,8 +146,6 @@ export async function generateAiResponse(
   });
 
   const rawText = await response.text();
-  console.log('[AI Pipeline] 1. RAW EDGE FUNCTION HTTP Status:', response.status);
-  console.log('[AI Pipeline] 1. RAW EDGE FUNCTION Body:', rawText);
 
   if (!response.ok) {
     let errorMsg = `Request failed (${response.status})`;
@@ -130,7 +165,6 @@ export async function generateAiResponse(
     console.error('[AI Pipeline] JSON parse error:', parseErr);
     data = rawText;
   }
-  console.log('[AI Pipeline] 2. Parsed JSON:', data);
 
   let content = '';
 
@@ -155,7 +189,6 @@ export async function generateAiResponse(
   }
 
   content = content.trim();
-  console.log('[AI Pipeline] 3. generateAiResponse() return value:', content);
 
   if (!content || content === 'undefined' || content === 'null') {
     throw new Error('AI service returned an empty or invalid response');
@@ -219,7 +252,6 @@ export async function generateWeeklyMoodAnalysis(
 
   const habitNames = userHabits.map((h) => `${h.icon} ${h.name}`).join(', ');
 
-  // Deterministic fallback templates (empathetic, non-diagnostic)
   let defaultSummary = '';
   let defaultEncouragement = '';
   const defaultHabitSuggestions: string[] = [];
@@ -266,7 +298,6 @@ export async function generateWeeklyMoodAnalysis(
     }
   }
 
-  // Try generating with AI Edge Function if available
   try {
     const prompt = `Analyze the student's 7-day mood logs and habits.
 Data:
@@ -304,7 +335,7 @@ CRITICAL SAFETY & TONE RULES:
       };
     }
   } catch {
-    // Fallback to deterministic summary if AI call fails or is unconfigured
+    // Fallback
   }
 
   return {
@@ -318,4 +349,3 @@ CRITICAL SAFETY & TONE RULES:
     habitSuggestions: defaultHabitSuggestions,
   };
 }
-

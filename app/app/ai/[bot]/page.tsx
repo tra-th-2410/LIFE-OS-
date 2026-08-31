@@ -48,6 +48,7 @@ function getActionsForBot(botType: BotType): string[] {
   if (botType === 'writing') return WRITING_ACTIONS;
   if (botType === 'project') return PROJECT_ACTIONS;
   if (botType === 'career') return CAREER_ACTIONS;
+  if (botType === 'study_coach') return ['Phân tích điểm yếu', 'Lên lịch ôn tập', 'Đề xuất kế hoạch'];
   return [];
 }
 
