@@ -36,6 +36,7 @@ const navItems = [
   { href: '/app', label: 'Home', icon: Home },
   { href: '/app/my-life', label: 'My Life', icon: Heart },
   { href: '/app/community', label: 'Community', icon: Users },
+  { href: '/app/projects', label: 'Projects', icon: Target },
   { href: '/app/study', label: 'Study', icon: BookOpen },
   { href: '/app/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/app/ai', label: 'AI Center', icon: Bot },

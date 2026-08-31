@@ -63,6 +63,55 @@ type CommunityTab =
 
 const EMOJI_OPTIONS = ['💬', '📚', '🎮', '🎨', '🏆', '🌱', '💻', '🎵', '⚽', '🔬', '🌍', '✨'];
 
+/**
+ * Robust helper to resolve an attachment's view/download URL.
+ * Handles: full URLs, private 'community-files' signed URLs, and public/signed 'forum-images'.
+ */
+async function resolveAttachmentUrl(filePath: string): Promise<string> {
+  if (!filePath) return '';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('data:')) {
+    return filePath;
+  }
+
+  // 1. Primary: Private storage bucket 'community-files' (with signed URL)
+  try {
+    const { data, error } = await supabase.storage
+      .from('community-files')
+      .createSignedUrl(filePath, 3600);
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+  } catch (e) {
+    console.debug('[Community Storage] Failed to get signed URL from community-files:', e);
+  }
+
+  // 2. Secondary: Public storage bucket 'forum-images'
+  try {
+    const { data: pubData } = supabase.storage
+      .from('forum-images')
+      .getPublicUrl(filePath);
+    if (pubData?.publicUrl) {
+      return pubData.publicUrl;
+    }
+  } catch (e) {
+    console.debug('[Community Storage] Failed to get public URL from forum-images:', e);
+  }
+
+  // 3. Fallback: Signed URL from 'forum-images'
+  try {
+    const { data, error } = await supabase.storage
+      .from('forum-images')
+      .createSignedUrl(filePath, 3600);
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+  } catch (e) {
+    console.debug('[Community Storage] Failed fallback to signed URL from forum-images:', e);
+  }
+
+  return '';
+}
+
 export default function CommunityPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -154,12 +203,13 @@ export default function CommunityPage() {
   const loadData = useCallback(async () => {
     setLoadingCommunities(true);
     try {
-      const [commRes, catRes, postsRes, groupsRes, attsRes] = await Promise.all([
+      const [commRes, catRes, postsRes, groupsRes, commAttsRes, forumAttsRes] = await Promise.all([
         supabase.from('communities').select('*').is('archived_at', null).order('members_count', { ascending: false }),
         supabase.from('forum_categories').select('*').order('sort_order', { ascending: true }),
         supabase.from('forum_posts').select('*, author:profiles!forum_posts_author_id_fkey(username, display_name, avatar_url, id), category:forum_categories!forum_posts_category_id_fkey(*)').eq('status', 'active').order('created_at', { ascending: false }).limit(20),
         supabase.from('study_groups').select('*').order('members_count', { ascending: false }),
         supabase.from('community_post_attachments').select('*').order('created_at', { ascending: false }).limit(40),
+        supabase.from('forum_post_attachments').select('*').order('created_at', { ascending: false }).limit(40),
       ]);
 
       setCommunities((commRes.data as Community[]) ?? []);
@@ -169,22 +219,25 @@ export default function CommunityPage() {
       const grps = (groupsRes.data as StudyGroup[]) ?? [];
       setStudyGroups(grps);
 
-      const allAtts = (attsRes.data as CommunityPostAttachment[]) ?? [];
+      const allAtts: CommunityPostAttachment[] = [
+        ...((commAttsRes.data as CommunityPostAttachment[]) ?? []),
+        ...((forumAttsRes.data as any[]) ?? []),
+      ];
       const docList = allAtts.filter((a) => !a.is_image);
       const imgList = allAtts.filter((a) => a.is_image);
       setDocuments(docList);
       setImages(imgList);
 
-      // Resolve URLs for images
+      // Pre-resolve signed/public URLs for all image attachments
       const imgMap: Record<string, string> = {};
-      for (const img of imgList) {
-        if (img.file_path.startsWith('http')) {
-          imgMap[img.id] = img.file_path;
-        } else {
-          const { data: pubData } = supabase.storage.from('forum-images').getPublicUrl(img.file_path);
-          imgMap[img.id] = pubData?.publicUrl || img.file_path;
-        }
-      }
+      await Promise.all(
+        imgList.map(async (img) => {
+          const resolved = await resolveAttachmentUrl(img.file_path);
+          if (resolved) {
+            imgMap[img.id] = resolved;
+          }
+        })
+      );
       setImageUrlsMap(imgMap);
 
       // Load user's joined study groups & friends
@@ -342,27 +395,9 @@ export default function CommunityPage() {
   const handleDownloadDocument = async (doc: CommunityPostAttachment) => {
     setDownloadingDocId(doc.id);
     try {
-      let downloadUrl = '';
-
-      if (doc.file_path.startsWith('http')) {
-        downloadUrl = doc.file_path;
-      } else {
-        const { data: signedData, error: signedErr } = await supabase.storage
-          .from('community-files')
-          .createSignedUrl(doc.file_path, 3600);
-
-        if (!signedErr && signedData?.signedUrl) {
-          downloadUrl = signedData.signedUrl;
-        } else {
-          const { data: pubData } = supabase.storage
-            .from('community-files')
-            .getPublicUrl(doc.file_path);
-          downloadUrl = pubData?.publicUrl || '';
-        }
-      }
-
+      const downloadUrl = await resolveAttachmentUrl(doc.file_path);
       if (!downloadUrl) {
-        throw new Error('Không tạo được đường dẫn tải tệp');
+        throw new Error('Không tạo được đường dẫn tải tệp từ Storage');
       }
 
       const link = document.createElement('a');
@@ -377,7 +412,7 @@ export default function CommunityPage() {
       toast.success(`Đang tải xuống "${doc.file_name}"...`);
     } catch (err) {
       console.error('Error downloading document:', err);
-      toast.error('Không thể tải xuống tệp. Vui lòng thử lại sau.');
+      toast.error('Không thể tải xuống tệp. Vui lòng kiểm tra quyền truy cập tệp.');
     } finally {
       setDownloadingDocId(null);
     }
@@ -1349,29 +1384,14 @@ export default function CommunityPage() {
             </Card>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
-              {images.map((img) => {
-                const imgUrl = imageUrlsMap[img.id] || img.file_path;
-                return (
-                  <div
-                    key={img.id}
-                    onClick={() => setLightboxImage(imgUrl)}
-                    className="relative rounded-2xl overflow-hidden aspect-video border border-border/60 bg-muted/40 cursor-pointer group hover:border-primary/50 hover:shadow-md transition-all"
-                    title="Nhấp để xem ảnh phóng to & toàn màn hình"
-                  >
-                    <img
-                      src={imgUrl}
-                      alt={img.file_name}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
-                      <p className="text-[11px] text-white truncate font-medium">{img.file_name}</p>
-                    </div>
-                  </div>
-                );
-              })}
+              {images.map((img) => (
+                <CommunityImageCard
+                  key={img.id}
+                  attachment={img}
+                  resolvedUrl={imageUrlsMap[img.id]}
+                  onOpenLightbox={(url) => setLightboxImage(url)}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -1654,8 +1674,97 @@ export default function CommunityPage() {
 
       {/* Image Lightbox View for Media Gallery */}
       {lightboxImage && (
-        <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} />
+        <ImageLightbox src={lightboxImage} alt="Community Image Preview" onClose={() => setLightboxImage(null)} />
       )}
+    </div>
+  );
+}
+
+/**
+ * Dedicated component to asynchronously load, render, and handle lightbox on community images.
+ */
+function CommunityImageCard({
+  attachment,
+  resolvedUrl,
+  onOpenLightbox,
+}: {
+  attachment: CommunityPostAttachment;
+  resolvedUrl?: string;
+  onOpenLightbox: (url: string) => void;
+}) {
+  const [url, setUrl] = useState<string | null>(resolvedUrl || null);
+  const [loading, setLoading] = useState(!resolvedUrl);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    if (resolvedUrl) {
+      setUrl(resolvedUrl);
+      setLoading(false);
+      return;
+    }
+
+    let isCancelled = false;
+    setLoading(true);
+    setHasError(false);
+
+    resolveAttachmentUrl(attachment.file_path)
+      .then((res) => {
+        if (!isCancelled) {
+          if (res) {
+            setUrl(res);
+          } else {
+            setHasError(true);
+          }
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setHasError(true);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [attachment.file_path, resolvedUrl]);
+
+  if (loading) {
+    return (
+      <div className="relative rounded-2xl overflow-hidden aspect-video border border-border/60 bg-muted/40 animate-shimmer flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground/50" />
+      </div>
+    );
+  }
+
+  if (hasError || !url) {
+    return (
+      <div className="relative rounded-2xl overflow-hidden aspect-video border border-dashed border-border/60 bg-muted/30 p-3 flex flex-col items-center justify-center text-center space-y-1.5">
+        <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+        <p className="text-[11px] text-muted-foreground truncate max-w-full font-medium px-2" title={attachment.file_name}>
+          {attachment.file_name}
+        </p>
+        <span className="text-[10px] text-muted-foreground/60">Không thể tải ảnh</span>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={() => onOpenLightbox(url)}
+      className="relative rounded-2xl overflow-hidden aspect-video border border-border/60 bg-muted/40 cursor-pointer group hover:border-primary/50 hover:shadow-md transition-all"
+      title={`Xem ảnh: ${attachment.file_name}`}
+    >
+      <img
+        src={url}
+        alt={attachment.file_name}
+        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        onError={() => setHasError(true)}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-2.5">
+        <p className="text-[11px] text-white truncate font-medium">{attachment.file_name}</p>
+      </div>
     </div>
   );
 }
