@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
+import { useLanguage } from '@/components/language-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,7 @@ const SUBJECT_COLORS: Record<string, { bg: string; text: string; border: string 
 
 export default function SmartCalendarPage() {
   const { user } = useAuth();
+  const { t, language } = useLanguage();
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewMode>('week');
   const [events, setEvents] = useState<SmartCalendarEvent[]>([]);
@@ -366,12 +368,12 @@ export default function SmartCalendarPage() {
       days.push({
         date: d,
         dateStr,
-        dayName: d.toLocaleDateString('vi-VN', { weekday: 'short' }),
+        dayName: d.toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US', { weekday: 'short' }),
         isToday: dateStr === todayStr,
       });
     }
     return days;
-  }, [currentDate]);
+  }, [currentDate, language]);
 
   // Month View Days Calculation (7 columns: Mon -> Sun, 35 or 42 grid slots)
   const monthGridDays = useMemo(() => {
@@ -413,6 +415,14 @@ export default function SmartCalendarPage() {
     return days;
   }, [currentDate]);
 
+  // Month View Weekday Headers (Mon -> Sun)
+  const monthWeekdayHeaders = useMemo(() => {
+    if (language === 'vi') {
+      return ['Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7', 'Chủ Nhật'];
+    }
+    return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  }, [language]);
+
   // Day View calculation
   const dayViewDateStr = useMemo(() => getISODate(currentDate), [currentDate]);
   const dayViewEvents = useMemo(() => {
@@ -423,20 +433,36 @@ export default function SmartCalendarPage() {
     return dayViewEvents.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
   }, [dayViewEvents]);
 
-  // Header Title Text: Explicit "Tháng M năm YYYY" (e.g., "Tháng 9 năm 2026")
+  // Header Title Text: Explicit "Tháng M năm YYYY" vs "Month YYYY"
   const headerTitleText = useMemo(() => {
+    const monthNamesEn = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
     if (viewMode === 'day') {
-      const dayNames = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
-      const dayName = dayNames[currentDate.getDay()];
-      const d = String(currentDate.getDate()).padStart(2, '0');
-      const m = currentDate.getMonth() + 1;
-      const y = currentDate.getFullYear();
-      return `${dayName}, ngày ${d} tháng ${m} năm ${y}`;
+      if (language === 'vi') {
+        const dayNamesVi = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+        const dayName = dayNamesVi[currentDate.getDay()];
+        const d = String(currentDate.getDate()).padStart(2, '0');
+        const m = currentDate.getMonth() + 1;
+        const y = currentDate.getFullYear();
+        return `${dayName}, ngày ${d} tháng ${m} năm ${y}`;
+      } else {
+        const dayNamesEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayName = dayNamesEn[currentDate.getDay()];
+        const d = currentDate.getDate();
+        const m = monthNamesEn[currentDate.getMonth()];
+        const y = currentDate.getFullYear();
+        return `${dayName}, ${m} ${d}, ${y}`;
+      }
     }
     const m = currentDate.getMonth() + 1;
     const y = currentDate.getFullYear();
-    return `Tháng ${m} năm ${y}`;
-  }, [currentDate, viewMode]);
+    if (language === 'vi') {
+      return `Tháng ${m} năm ${y}`;
+    }
+    return `${monthNamesEn[m - 1]} ${y}`;
+  }, [currentDate, viewMode, language]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -524,13 +550,13 @@ export default function SmartCalendarPage() {
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card/60 p-3 rounded-2xl border border-border/60 backdrop-blur-sm">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleToday} className="rounded-xl text-xs font-medium">
-            Hôm nay
+            {t('Hôm nay')}
           </Button>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={handlePrev} className="h-8 w-8 rounded-xl" title="Lùi thời gian">
+            <Button variant="ghost" size="icon" onClick={handlePrev} className="h-8 w-8 rounded-xl" title={t('Previous')}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleNext} className="h-8 w-8 rounded-xl" title="Tiến thời gian">
+            <Button variant="ghost" size="icon" onClick={handleNext} className="h-8 w-8 rounded-xl" title={t('Next')}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -551,7 +577,7 @@ export default function SmartCalendarPage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {mode === 'month' ? 'Tháng' : mode === 'week' ? 'Tuần' : mode === 'day' ? 'Ngày' : 'Danh sách'}
+              {mode === 'month' ? t('Tháng') : mode === 'week' ? t('Tuần') : mode === 'day' ? t('Ngày') : t('Danh sách')}
             </button>
           ))}
         </div>
@@ -563,14 +589,12 @@ export default function SmartCalendarPage() {
       {viewMode === 'month' && (
         <div className="space-y-2 animate-in fade-in duration-200">
           {/* Day of Week Header */}
-          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-1 px-1">
-            <div>Thứ 2</div>
-            <div>Thứ 3</div>
-            <div>Thứ 4</div>
-            <div>Thứ 5</div>
-            <div>Thứ 6</div>
-            <div>Thứ 7</div>
-            <div className="text-primary">Chủ Nhật</div>
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-muted-foreground py-1 px-1">
+            {monthWeekdayHeaders.map((hdr, idx) => (
+              <div key={idx} className={idx === 6 ? 'text-primary' : ''}>
+                {hdr}
+              </div>
+            ))}
           </div>
 
           {/* Month 7x5 or 7x6 Grid */}

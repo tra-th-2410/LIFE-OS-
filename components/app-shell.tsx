@@ -23,6 +23,7 @@ import {
   CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
+import { useLanguage } from '@/components/language-provider';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, profile, role, signOut } = useAuth();
+  const { t } = useLanguage();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -213,7 +215,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Link href="/app/search" className="block">
               <div className="w-full rounded-lg border border-input bg-muted/50 px-10 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
-                Search communities, projects, people...
+                {t('Search communities, projects, people...')}
               </div>
             </Link>
           </div>
@@ -266,6 +268,8 @@ function SidebarContent({
   onNavigate?: () => void;
   onSignOut: () => void;
 }) {
+  const { t } = useLanguage();
+
   return (
     <div className="flex flex-1 flex-col overflow-y-auto scrollbar-thin">
       <nav className="flex-1 space-y-1 px-3 py-4">
@@ -283,7 +287,7 @@ function SidebarContent({
               }`}
             >
               <item.icon className="h-5 w-5" />
-              {item.label}
+              {t(item.label)}
               {item.href === '/app/ai' && (
                 <Sparkles className="ml-auto h-3 w-3 text-primary" />
               )}
@@ -303,7 +307,7 @@ function SidebarContent({
           }`}
         >
           <Bell className="h-5 w-5" />
-          Notifications
+          {t('Notifications')}
           {unreadCount > 0 && (
             <Badge className="ml-auto h-5 min-w-5 px-1.5 text-xs">{unreadCount}</Badge>
           )}
@@ -318,14 +322,14 @@ function SidebarContent({
           }`}
         >
           <User className="h-5 w-5" />
-          Profile
+          {t('Profile')}
         </Link>
 
         {isAdmin && (
           <>
             <div className="my-3 border-t border-sidebar-border" />
             <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">
-              Admin
+              {t('Admin')}
             </p>
             <Link
               href="/app/admin"
@@ -337,7 +341,7 @@ function SidebarContent({
               }`}
             >
               <Shield className="h-5 w-5" />
-              Admin Dashboard
+              {t('Admin Dashboard')}
             </Link>
             <Link
               href="/app/admin/verifications"
@@ -349,7 +353,7 @@ function SidebarContent({
               }`}
             >
               <FileCheck className="h-5 w-5" />
-              Verification Requests
+              {t('Verification Requests')}
             </Link>
             <Link
               href="/app/admin/forum-moderation"
@@ -361,7 +365,7 @@ function SidebarContent({
               }`}
             >
               <MessageSquare className="h-5 w-5" />
-              Forum Moderation
+              {t('Forum Moderation')}
             </Link>
           </>
         )}
@@ -373,7 +377,7 @@ function SidebarContent({
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
         >
           <LogOut className="h-5 w-5" />
-          Sign out
+          {t('Sign out')}
         </button>
       </div>
     </div>

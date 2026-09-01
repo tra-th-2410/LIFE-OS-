@@ -371,7 +371,7 @@ export function JournalPostCard({
         </div>
 
         {/* Post Content */}
-        <div className="space-y-2">
+        <div className="space-y-2" data-no-translate>
           {post.title && (
             <h3 className="font-semibold text-base text-foreground leading-snug">{post.title}</h3>
           )}
@@ -570,7 +570,7 @@ export function JournalPostCard({
                               {formatRelativeTime(comment.created_at)}
                             </span>
                           </div>
-                          <p className="text-foreground/90 whitespace-pre-wrap mt-0.5">
+                          <p className="text-foreground/90 whitespace-pre-wrap mt-0.5" data-no-translate>
                             {comment.content}
                           </p>
                         </div>

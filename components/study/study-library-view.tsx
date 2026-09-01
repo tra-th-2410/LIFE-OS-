@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
+import { useLanguage } from '@/components/language-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,6 +42,7 @@ import { toast } from 'sonner';
 
 export function StudyLibraryView() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const [materials, setMaterials] = useState<StudyMaterial[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,14 +267,14 @@ export function StudyLibraryView() {
       {/* Header & Upload Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-display font-bold">Thư viện tài liệu học tập</h2>
+          <h2 className="text-2xl font-display font-bold">{t('Thư viện tài liệu học tập')}</h2>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Lưu trữ tài liệu PDF, Word, PowerPoint, Excel, Ghi chú và sử dụng AI để tự động tạo Flashcards & Đề trắc nghiệm.
+            {t('Lưu trữ tài liệu PDF, Word, PowerPoint, Excel, Ghi chú và sử dụng AI để tự động tạo Flashcards & Đề trắc nghiệm.')}
           </p>
         </div>
 
         <Button onClick={() => setShowUploadModal(true)} className="gap-1.5 rounded-xl">
-          <Upload className="h-4 w-4" /> Tải lên tài liệu
+          <Upload className="h-4 w-4" /> {t('Tải lên tài liệu')}
         </Button>
       </div>
 
@@ -281,7 +283,7 @@ export function StudyLibraryView() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Tìm kiếm tài liệu, bài tập, công thức..."
+            placeholder={t('Tìm kiếm tài liệu, bài tập, công thức...')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 h-10 rounded-xl"
@@ -299,7 +301,7 @@ export function StudyLibraryView() {
                   : 'border-border/60 text-muted-foreground hover:text-foreground'
               }`}
             >
-              {sub === 'all' ? 'Tất cả môn' : sub}
+              {sub === 'all' ? t('Tất cả môn') : t(sub)}
             </button>
           ))}
         </div>
@@ -316,12 +318,12 @@ export function StudyLibraryView() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <BookOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="text-sm font-medium">Chưa có tài liệu nào trong thư viện</p>
+            <p className="text-sm font-medium">{t('Chưa có tài liệu nào trong thư viện')}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Tải lên file giáo trình, đề cương hoặc tóm tắt để AI tạo bộ câu hỏi trắc nghiệm và flashcards cho bạn!
+              {t('Tải lên file giáo trình, đề cương hoặc tóm tắt để AI tạo bộ câu hỏi trắc nghiệm và flashcards cho bạn!')}
             </p>
             <Button onClick={() => setShowUploadModal(true)} size="sm" className="mt-4 rounded-xl">
-              <Plus className="h-4 w-4 mr-1" /> Tải tài liệu lên ngay
+              <Plus className="h-4 w-4 mr-1" /> {t('Tải tài liệu lên ngay')}
             </Button>
           </CardContent>
         </Card>
@@ -337,7 +339,7 @@ export function StudyLibraryView() {
                   <div className="min-w-0">
                     <h3 className="font-bold text-sm text-foreground truncate leading-snug">{mat.title}</h3>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="text-[10px]">{mat.subject || 'Tổng hợp'}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{t(mat.subject || 'Toán')}</Badge>
                       {mat.topic && <span>• {mat.topic}</span>}
                       {mat.file_size ? <span>• {formatFileSize(mat.file_size)}</span> : null}
                     </div>
@@ -349,7 +351,7 @@ export function StudyLibraryView() {
                   variant="ghost"
                   onClick={() => handleDeleteMaterial(mat)}
                   className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive shrink-0"
-                  title="Xóa tài liệu"
+                  title={t('Xóa tài liệu')}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -376,7 +378,7 @@ export function StudyLibraryView() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
                     >
-                      <Download className="h-3 w-3" /> Mở / Tải về
+                      <Download className="h-3 w-3" /> {t('Mở / Tải về')}
                     </a>
                   )}
                 </div>
@@ -388,7 +390,7 @@ export function StudyLibraryView() {
                   className="rounded-xl h-8 text-xs font-semibold gap-1.5 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary shadow-xs"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  AI sinh Quiz & Flashcards
+                  {t('AI sinh Quiz & Flashcards')}
                 </Button>
               </div>
             </Card>
@@ -400,16 +402,16 @@ export function StudyLibraryView() {
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
         <DialogContent className="sm:max-w-[540px]">
           <DialogHeader>
-            <DialogTitle>Tải lên tài liệu học tập</DialogTitle>
+            <DialogTitle>{t('Tải lên tài liệu học tập')}</DialogTitle>
             <DialogDescription>
-              Hỗ trợ file PDF, Word (.doc, .docx), PowerPoint (.ppt, .pptx), Excel (.xls, .xlsx), Text (.txt) hoặc Ảnh tài liệu.
+              {t('Hỗ trợ file PDF, Word (.doc, .docx), PowerPoint (.ppt, .pptx), Excel (.xls, .xlsx), Text (.txt) hoặc Ảnh tài liệu.')}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleUploadMaterial} className="space-y-4 pt-2">
             {/* File Picker */}
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Chọn file tài liệu</Label>
+              <Label className="text-xs font-semibold">{t('Chọn file tài liệu')}</Label>
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
@@ -436,15 +438,15 @@ export function StudyLibraryView() {
                 ) : (
                   <div className="space-y-1">
                     <Upload className="h-6 w-6 text-muted-foreground mx-auto" />
-                    <p className="text-xs font-medium text-foreground">Click để chọn file từ thiết bị của bạn</p>
-                    <p className="text-[10px] text-muted-foreground">PDF, DOCX, PPTX, XLSX, TXT, PNG, JPG (Tối đa 50MB)</p>
+                    <p className="text-xs font-medium text-foreground">{t('Click để chọn file từ thiết bị của bạn')}</p>
+                    <p className="text-[10px] text-muted-foreground">PDF, DOCX, PPTX, XLSX, TXT, PNG, JPG ({t('Tối đa 50MB')})</p>
                   </div>
                 )}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Tên tài liệu / Ghi chú *</Label>
+              <Label className="text-xs font-semibold">{t('Tên tài liệu / Ghi chú *')}</Label>
               <Input
                 value={materialTitle}
                 onChange={(e) => setMaterialTitle(e.target.value)}
@@ -455,34 +457,34 @@ export function StudyLibraryView() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Môn học</Label>
+                <Label className="text-xs font-semibold">{t('Môn học')}</Label>
                 <Input value={materialSubject} onChange={(e) => setMaterialSubject(e.target.value)} placeholder="Toán, Tiếng Anh..." required />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Chủ đề (Topic)</Label>
+                <Label className="text-xs font-semibold">{t('Chủ đề (Topic)')}</Label>
                 <Input value={materialTopic} onChange={(e) => setMaterialTopic(e.target.value)} placeholder="Khảo sát hàm số..." />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Tóm tắt nội dung chính / Ghi chú</Label>
+              <Label className="text-xs font-semibold">{t('Tóm tắt nội dung chính / Ghi chú')}</Label>
               <Textarea
                 value={materialSummary}
                 onChange={(e) => setMaterialSummary(e.target.value)}
-                placeholder="Dán nội dung bài giảng, tóm tắt lý thuyết hoặc công thức cốt lõi tại đây..."
+                placeholder={t('Dán nội dung bài giảng, tóm tắt lý thuyết hoặc công thức cốt lõi tại đây...')}
                 rows={3}
               />
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Hủy</Button>
+              <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>{t('Hủy')}</Button>
               <Button type="submit" disabled={uploading || !materialTitle.trim()}>
                 {uploading ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Đang tải lên...
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> {t('Đang tải lên...')}
                   </>
                 ) : (
-                  'Tải lên & Lưu tài liệu'
+                  t('Tải lên & Lưu tài liệu')
                 )}
               </Button>
             </DialogFooter>
