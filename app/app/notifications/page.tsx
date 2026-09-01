@@ -36,6 +36,7 @@ type NotificationFilter = 'all' | 'calendar' | 'challenges' | 'community' | 'unr
 
 export default function NotificationsPage() {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterTab, setFilterTab] = useState<NotificationFilter>('all');
@@ -110,27 +111,14 @@ export default function NotificationsPage() {
         (payload) => {
           if (payload.eventType === 'INSERT' && payload.new) {
             const newNotif = payload.new as Notification;
-            setNotifications((prev) => {
-              if (prev.some((n) => n.id === newNotif.id)) return prev;
-              return [newNotif, ...prev];
-            });
-            if (newNotif.title) {
-              toast.info(newNotif.title, {
-                description: newNotif.body ?? undefined,
-              });
-            }
+            setNotifications((prev) => [newNotif, ...prev.filter((n) => n.id !== newNotif.id)]);
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            setNotifications((prev) => prev.filter((n) => n.id !== (payload.old as Notification).id));
           } else if (payload.eventType === 'UPDATE' && payload.new) {
             const updated = payload.new as Notification;
-            setNotifications((prev) =>
-              prev.map((n) => (n.id === updated.id ? { ...n, ...updated } : n))
-            );
-          } else if (payload.eventType === 'DELETE' && payload.old) {
-            const deletedId = (payload.old as { id?: string }).id;
-            if (deletedId) {
-              setNotifications((prev) => prev.filter((n) => n.id !== deletedId));
-            } else {
-              load();
-            }
+            setNotifications((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
+          } else {
+            load();
           }
         }
       )
@@ -151,7 +139,7 @@ export default function NotificationsPage() {
         .eq('is_read', false);
 
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
-      toast.success('Đã đánh dấu đọc tất cả thông báo!');
+      toast.success(t('Mark all as read'));
     } catch {
       toast.error('Không thể cập nhật thông báo');
     }
@@ -171,7 +159,7 @@ export default function NotificationsPage() {
     try {
       await supabase.from('notifications').delete().eq('user_id', user.id);
       setNotifications([]);
-      toast.success('Đã xóa tất cả thông báo');
+      toast.success(t('Xóa tất cả'));
     } catch {
       toast.error('Không thể xóa thông báo');
     }
@@ -208,23 +196,23 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const renderIcon = (type: string) => {
-    const t = String(type || '').toLowerCase();
-    if (t.includes('calendar') || t.includes('schedule') || t.includes('reminder')) {
+    const tIcon = String(type || '').toLowerCase();
+    if (tIcon.includes('calendar') || tIcon.includes('schedule') || tIcon.includes('reminder')) {
       return <Clock className="h-5 w-5 text-blue-500" />;
     }
-    if (t.includes('streak') || t.includes('flame')) {
+    if (tIcon.includes('streak') || tIcon.includes('flame')) {
       return <Flame className="h-5 w-5 text-orange-500" />;
     }
-    if (t.includes('report') || t.includes('chart')) {
+    if (tIcon.includes('report') || tIcon.includes('chart')) {
       return <BarChart3 className="h-5 w-5 text-purple-500" />;
     }
-    if (t.includes('friend') || t.includes('community')) {
+    if (tIcon.includes('friend') || tIcon.includes('community')) {
       return <Users className="h-5 w-5 text-emerald-500" />;
     }
-    if (t.includes('chat') || t.includes('message')) {
+    if (tIcon.includes('chat') || tIcon.includes('message')) {
       return <MessageSquare className="h-5 w-5 text-teal-500" />;
     }
-    if (t.includes('ai') || t.includes('coach')) {
+    if (tIcon.includes('ai') || tIcon.includes('coach')) {
       return <Bot className="h-5 w-5 text-primary" />;
     }
     return <Bell className="h-5 w-5 text-primary" />;
@@ -236,25 +224,25 @@ export default function NotificationsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold">Trung Tâm Thông Báo</h1>
+            <h1 className="text-2xl sm:text-3xl font-display font-bold">{t('Trung Tâm Thông Báo')}</h1>
             {unreadCount > 0 && (
-              <Badge className="bg-primary text-primary-foreground text-xs">{unreadCount} mới</Badge>
+              <Badge className="bg-primary text-primary-foreground text-xs">{unreadCount} {t('mới')}</Badge>
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Trung tâm duy nhất tổng hợp thông báo Lịch học, Thử thách, Bạn bè, Diễn đàn và Trợ lý AI.
+            {t('Trung tâm duy nhất tổng hợp thông báo Lịch học, Thử thách, Bạn bè, Diễn đàn và Trợ lý AI.')}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
             <Button onClick={handleMarkAllRead} variant="outline" size="sm" className="gap-1.5 rounded-xl text-xs">
-              <CheckCheck className="h-4 w-4" /> Đọc tất cả
+              <CheckCheck className="h-4 w-4" /> {t('Mark all as read')}
             </Button>
           )}
           {notifications.length > 0 && (
             <Button onClick={handleDeleteAll} variant="ghost" size="sm" className="gap-1.5 rounded-xl text-xs text-muted-foreground hover:text-destructive">
-              <Trash2 className="h-4 w-4" /> Xóa tất cả
+              <Trash2 className="h-4 w-4" /> {t('Xóa tất cả')}
             </Button>
           )}
         </div>
@@ -267,14 +255,14 @@ export default function NotificationsPage() {
             <div className="flex items-start sm:items-center gap-3">
               <Laptop className="h-5 w-5 text-primary shrink-0 mt-0.5 sm:mt-0" />
               <div>
-                <p className="font-semibold text-sm text-foreground">Bật thông báo trên máy tính (Desktop Notifications)</p>
+                <p className="font-semibold text-sm text-foreground">{t('Kích hoạt Desktop Notifications')}</p>
                 <p className="text-xs text-muted-foreground">
-                  Nhận nhắc nhở lịch học và thử thách ngay cả khi bạn không mở tab Life OS.
+                  {t('Nhận nhắc nhở lịch học và thử thách ngay cả khi bạn không mở tab Life OS.')}
                 </p>
               </div>
             </div>
             <Button onClick={requestDesktopNotifications} size="sm" className="gap-1.5 rounded-xl shrink-0 self-start sm:self-auto">
-              <BellRing className="h-4 w-4" /> Bật thông báo
+              <BellRing className="h-4 w-4" /> {t('Bật thông báo')}
             </Button>
           </div>
         </Card>
@@ -283,11 +271,11 @@ export default function NotificationsPage() {
       {/* Filter Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-border/40">
         {[
-          { id: 'all' as const, label: 'Tất cả', icon: Bell },
-          { id: 'calendar' as const, label: 'Lịch học & Nhắc nhở', icon: CalendarDays },
-          { id: 'challenges' as const, label: 'Thử thách & Streak', icon: Trophy },
-          { id: 'community' as const, label: 'Cộng đồng & Bạn bè', icon: Users },
-          { id: 'unread' as const, label: `Chưa đọc (${unreadCount})`, icon: BellRing },
+          { id: 'all' as const, label: t('Tất cả'), icon: Bell },
+          { id: 'calendar' as const, label: t('Lịch học & Nhắc nhở'), icon: CalendarDays },
+          { id: 'challenges' as const, label: t('Thử thách & Streak'), icon: Trophy },
+          { id: 'community' as const, label: t('Bạn bè & Cộng đồng'), icon: Users },
+          { id: 'unread' as const, label: `${t('Chưa đọc')} (${unreadCount})`, icon: BellRing },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = filterTab === tab.id;
@@ -319,9 +307,9 @@ export default function NotificationsPage() {
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <Bell className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="text-sm font-medium text-foreground">Không có thông báo nào</p>
+            <p className="text-sm font-medium text-foreground">{t('No notifications yet')}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Bạn đã cập nhật toàn bộ tin tức và lịch nhắc nhở mới nhất!
+              {t('Bạn đã cập nhật toàn bộ tin tức và lịch nhắc nhở mới nhất!')}
             </p>
           </CardContent>
         </Card>
@@ -353,13 +341,13 @@ export default function NotificationsPage() {
                       href={n.link}
                       className="inline-flex items-center text-xs font-semibold text-primary hover:underline mt-2"
                     >
-                      Xem chi tiết →
+                      {t('View details')} →
                     </Link>
                   )}
                 </div>
 
                 {!n.is_read && (
-                  <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" title="Chưa đọc" />
+                  <span className="h-2 w-2 rounded-full bg-primary shrink-0 mt-1" title={t('Chưa đọc')} />
                 )}
               </CardContent>
             </Card>

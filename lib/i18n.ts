@@ -87,6 +87,7 @@ export const translations = {
     'Bản đồ Năng lực & Weakness Map': 'Weakness Map',
     'Bảng quản trị': 'Admin Dashboard',
     'Bảng tin bạn bè': 'Friends Feed',
+    'Bảng tin công khai': 'Public Feed',
     'Bảng tin cộng đồng': 'Community Feed',
     'Bắt đầu': 'Get Started',
     'Bắt đầu phiên tập trung': 'Start Focus Session',
@@ -183,6 +184,7 @@ export const translations = {
     'Create account': 'Create account',
     'Create your account': 'Create your account',
     'Current Password': 'Current Password',
+    'Cuộc sống của tôi': 'My Life',
     'Cài đặt': 'Settings',
     'Cài đặt tài khoản': 'Account Settings',
     'Các lựa chọn': 'Options',
@@ -196,7 +198,7 @@ export const translations = {
     'Cập nhật hồ sơ thành công!': 'Profile updated successfully!',
     'Cập nhật mật khẩu': 'Update password',
     'Cập nhật mật khẩu thành công!': 'Password updated successfully!',
-    'Cộng đồng': 'Public Feed',
+    'Cộng đồng': 'Communities',
     'Daily': 'Daily',
     'Daily Mood Check-in': 'Daily Mood Check-in',
     'Danger Zone': 'Danger Zone',
@@ -703,11 +705,10 @@ export const translations = {
     'Tính năng': 'Features',
     'Tóm tắt nội dung chính / Ghi chú': 'Summary / Core Notes',
     'Tạm dừng': 'Pause',
-    'Tạo': 'Tạo',
     'Tạo bài viết': 'Create Post',
     'Tạo bộ thẻ & đề trắc nghiệm': 'Create Sets & Quizzes',
     'Tạo câu hỏi AI': 'Generate Quiz with AI',
-    'Tạo mới': 'Tạo mới',
+    'Tạo mới': 'Create',
     'Tạo phòng chat': 'Create Chat Room',
     'Tạo thói quen mới': 'Create Habit',
     'Tạo thông báo nhắc nhở trước giờ học?': 'Set reminder notification before session?',
@@ -828,7 +829,6 @@ export const translations = {
     'Đã có tài khoản?': 'Already have an account?',
     'Đã gửi lời mời kết bạn': 'Friend request sent',
     'Đã kích hoạt thông báo': 'Notifications Enabled',
-    'Đã kết bạn': 'Friends',
     'Đã lưu': 'Bookmarked',
     'Đã lưu tâm trạng thành công!': 'Mood Saved!',
     'Đã nắm vững': 'Mastered',
@@ -948,6 +948,7 @@ export const translations = {
     'Bản đồ Năng lực & Weakness Map': 'Bản đồ Năng lực & Weakness Map',
     'Bảng quản trị': 'Bảng quản trị',
     'Bảng tin bạn bè': 'Bảng tin bạn bè',
+    'Bảng tin công khai': 'Bảng tin công khai',
     'Bảng tin cộng đồng': 'Bảng tin cộng đồng',
     'Bắt đầu': 'Bắt đầu',
     'Bắt đầu phiên tập trung': 'Bắt đầu phiên tập trung',
@@ -1044,6 +1045,7 @@ export const translations = {
     'Create account': 'Tạo tài khoản',
     'Create your account': 'Tạo tài khoản của bạn',
     'Current Password': 'Mật khẩu hiện tại',
+    'Cuộc sống của tôi': 'Cuộc sống của tôi',
     'Cài đặt': 'Cài đặt',
     'Cài đặt tài khoản': 'Cài đặt tài khoản',
     'Các lựa chọn': 'Các lựa chọn',
@@ -1116,7 +1118,7 @@ export const translations = {
     'Friend Requests': 'Lời mời kết bạn',
     'Friend request accepted': 'Lời mời kết bạn đã được chấp nhận',
     'Friend request sent': 'Đã gửi lời mời kết bạn',
-    'Friends': 'Đã kết bạn',
+    'Friends': 'Bạn bè',
     'Friends & Community': 'Bạn bè & Cộng đồng',
     'Friends & Connections': 'Bạn bè & Kết nối',
     'Friends Feed': 'Bảng tin bạn bè',
@@ -1250,7 +1252,7 @@ export const translations = {
     'Most focused subject:': 'Môn học tập trung nhất:',
     'Mute Sound': 'Tắt âm thanh',
     'My Entries': 'Nhật ký của tôi',
-    'My Life': 'My Life',
+    'My Life': 'Cuộc sống của tôi',
     'Mô tả phòng': 'Mô tả phòng',
     'Môn học': 'Môn học',
     'Môn học tập trung nhất:': 'Môn học tập trung nhất:',
@@ -1336,7 +1338,7 @@ export const translations = {
     'Project Assistant': 'Trợ lý dự án',
     'Projects': 'Dự án',
     'Public': 'Công khai',
-    'Public Feed': 'Cộng đồng',
+    'Public Feed': 'Bảng tin công khai',
     'Publish Journal': 'Đăng bài viết',
     'Quay lại': 'Quay lại',
     'Question': 'Câu hỏi',
@@ -1564,7 +1566,6 @@ export const translations = {
     'Tính năng': 'Tính năng',
     'Tóm tắt nội dung chính / Ghi chú': 'Tóm tắt nội dung chính / Ghi chú',
     'Tạm dừng': 'Tạm dừng',
-    'Tạo': 'Tạo mới',
     'Tạo bài viết': 'Tạo bài viết',
     'Tạo bộ thẻ & đề trắc nghiệm': 'Tạo bộ thẻ & đề trắc nghiệm',
     'Tạo câu hỏi AI': 'Tạo câu hỏi AI',
@@ -1689,7 +1690,6 @@ export const translations = {
     'Đã có tài khoản?': 'Đã có tài khoản?',
     'Đã gửi lời mời kết bạn': 'Đã gửi lời mời kết bạn',
     'Đã kích hoạt thông báo': 'Đã kích hoạt thông báo',
-    'Đã kết bạn': 'Đã kết bạn',
     'Đã lưu': 'Đã lưu',
     'Đã lưu tâm trạng thành công!': 'Đã lưu tâm trạng thành công!',
     'Đã nắm vững': 'Đã nắm vững',
@@ -1734,7 +1734,6 @@ export function translate(key: string, language: Language): string {
   if (language === 'vi') {
     const directVi = (translations.vi as Record<string, string>)[trimmed];
     if (directVi && typeof directVi === 'string') return directVi;
-    // Case-insensitive lookup fallback
     const lower = trimmed.toLowerCase();
     for (const [k, v] of Object.entries(translations.vi)) {
       if (k.toLowerCase() === lower) return v;
@@ -1743,7 +1742,6 @@ export function translate(key: string, language: Language): string {
   } else {
     const directEn = (translations.en as Record<string, string>)[trimmed];
     if (directEn && typeof directEn === 'string') return directEn;
-    // Case-insensitive lookup fallback
     const lower = trimmed.toLowerCase();
     for (const [k, v] of Object.entries(translations.en)) {
       if (k.toLowerCase() === lower) return v;
