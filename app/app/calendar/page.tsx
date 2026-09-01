@@ -41,6 +41,7 @@ import {
   X,
   Flame,
   ArrowRight,
+  CalendarDays,
 } from 'lucide-react';
 import {
   getCalendarEvents,
@@ -115,16 +116,14 @@ export default function SmartCalendarPage() {
     if (!user) return;
     setLoading(true);
     try {
-      // Calculate view window (extend past and future by 30 days)
-      const start = new Date(currentDate);
-      start.setDate(start.getDate() - 35);
-      const end = new Date(currentDate);
-      end.setDate(end.getDate() + 35);
+      // Calculate view window (extend past and future by 60 days to cover month & week boundaries)
+      const start = new Date(currentDate.getFullYear(), currentDate.getMonth() - 2, 1);
+      const end = new Date(currentDate.getFullYear(), currentDate.getMonth() + 3, 0);
 
       const evs = await getCalendarEvents(user.id, getISODate(start), getISODate(end));
       setEvents(evs);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading calendar events:', err);
     } finally {
       setLoading(false);
     }
@@ -139,21 +138,39 @@ export default function SmartCalendarPage() {
     return getAdjustmentSuggestions(events);
   }, [events]);
 
-  // Quick Date Navigations
+  // Quick Date Navigations (Timezone-safe & Month-overflow safe)
   const handlePrev = () => {
-    const next = new Date(currentDate);
-    if (viewMode === 'month') next.setMonth(next.getMonth() - 1);
-    else if (viewMode === 'week') next.setDate(next.getDate() - 7);
-    else next.setDate(next.getDate() - 1);
-    setCurrentDate(next);
+    if (viewMode === 'month') {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const next = new Date(year, month - 1, 1);
+      setCurrentDate(next);
+    } else if (viewMode === 'week') {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() - 7);
+      setCurrentDate(next);
+    } else {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() - 1);
+      setCurrentDate(next);
+    }
   };
 
   const handleNext = () => {
-    const next = new Date(currentDate);
-    if (viewMode === 'month') next.setMonth(next.getMonth() + 1);
-    else if (viewMode === 'week') next.setDate(next.getDate() + 7);
-    else next.setDate(next.getDate() + 1);
-    setCurrentDate(next);
+    if (viewMode === 'month') {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const next = new Date(year, month + 1, 1);
+      setCurrentDate(next);
+    } else if (viewMode === 'week') {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() + 7);
+      setCurrentDate(next);
+    } else {
+      const next = new Date(currentDate);
+      next.setDate(next.getDate() + 1);
+      setCurrentDate(next);
+    }
   };
 
   const handleToday = () => {
@@ -332,7 +349,7 @@ export default function SmartCalendarPage() {
     }
   };
 
-  // Week View Days Calculation
+  // Week View Days Calculation (Mon -> Sun)
   const weekDays = useMemo(() => {
     const startOfWeek = new Date(currentDate);
     const dayIndex = startOfWeek.getDay(); // 0 is Sun, 1 is Mon...
@@ -355,6 +372,71 @@ export default function SmartCalendarPage() {
     }
     return days;
   }, [currentDate]);
+
+  // Month View Days Calculation (7 columns: Mon -> Sun, 35 or 42 grid slots)
+  const monthGridDays = useMemo(() => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Monday as 1st day (0 = Sun, 1 = Mon ... 6 = Sat)
+    const firstDayOfWeek = firstDay.getDay();
+    const offset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
+
+    const totalDaysInMonth = lastDay.getDate();
+    const totalSlots = offset + totalDaysInMonth > 35 ? 42 : 35;
+
+    const startDate = new Date(year, month, 1 - offset);
+    const todayStr = getISODate(new Date());
+    const days: {
+      date: Date;
+      dateStr: string;
+      dayNumber: number;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+    }[] = [];
+
+    for (let i = 0; i < totalSlots; i++) {
+      const d = new Date(startDate);
+      d.setDate(startDate.getDate() + i);
+      const dateStr = getISODate(d);
+
+      days.push({
+        date: d,
+        dateStr,
+        dayNumber: d.getDate(),
+        isCurrentMonth: d.getMonth() === month,
+        isToday: dateStr === todayStr,
+      });
+    }
+    return days;
+  }, [currentDate]);
+
+  // Day View calculation
+  const dayViewDateStr = useMemo(() => getISODate(currentDate), [currentDate]);
+  const dayViewEvents = useMemo(() => {
+    return events.filter((e) => e.date === dayViewDateStr);
+  }, [events, dayViewDateStr]);
+
+  const totalDayMinutes = useMemo(() => {
+    return dayViewEvents.reduce((acc, curr) => acc + (curr.duration_minutes || 0), 0);
+  }, [dayViewEvents]);
+
+  // Header Title Text: Explicit "Tháng M năm YYYY" (e.g., "Tháng 9 năm 2026")
+  const headerTitleText = useMemo(() => {
+    if (viewMode === 'day') {
+      const dayNames = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+      const dayName = dayNames[currentDate.getDay()];
+      const d = String(currentDate.getDate()).padStart(2, '0');
+      const m = currentDate.getMonth() + 1;
+      const y = currentDate.getFullYear();
+      return `${dayName}, ngày ${d} tháng ${m} năm ${y}`;
+    }
+    const m = currentDate.getMonth() + 1;
+    const y = currentDate.getFullYear();
+    return `Tháng ${m} năm ${y}`;
+  }, [currentDate, viewMode]);
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12">
@@ -404,7 +486,7 @@ export default function SmartCalendarPage() {
         </div>
       </div>
 
-      {/* AI Adjustment Suggestions Banner (Requirement X) */}
+      {/* AI Adjustment Suggestions Banner */}
       {adjustmentSuggestions.length > 0 && (
         <div className="space-y-2">
           {adjustmentSuggestions.map((sug) => (
@@ -445,21 +527,21 @@ export default function SmartCalendarPage() {
             Hôm nay
           </Button>
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={handlePrev} className="h-8 w-8 rounded-xl">
+            <Button variant="ghost" size="icon" onClick={handlePrev} className="h-8 w-8 rounded-xl" title="Lùi thời gian">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleNext} className="h-8 w-8 rounded-xl">
+            <Button variant="ghost" size="icon" onClick={handleNext} className="h-8 w-8 rounded-xl" title="Tiến thời gian">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
           <span className="font-display font-bold text-base sm:text-lg pl-2">
-            {currentDate.toLocaleDateString('vi-VN', { month: 'long', year: 'numeric' })}
+            {headerTitleText}
           </span>
         </div>
 
         {/* View Mode Tabs */}
         <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border/60 self-start sm:self-auto">
-          {(['week', 'month', 'day', 'agenda'] as const).map((mode) => (
+          {(['month', 'week', 'day', 'agenda'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
@@ -469,17 +551,122 @@ export default function SmartCalendarPage() {
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {mode === 'week' ? 'Tuần' : mode === 'month' ? 'Tháng' : mode === 'day' ? 'Ngày' : 'Danh sách'}
+              {mode === 'month' ? 'Tháng' : mode === 'week' ? 'Tuần' : mode === 'day' ? 'Ngày' : 'Danh sách'}
             </button>
           ))}
         </div>
       </div>
 
       {/* ========================================================= */}
-      {/* CALENDAR VIEW: WEEK VIEW (DEFAULT)                         */}
+      {/* 1. CALENDAR VIEW: MONTH VIEW                              */}
+      {/* ========================================================= */}
+      {viewMode === 'month' && (
+        <div className="space-y-2 animate-in fade-in duration-200">
+          {/* Day of Week Header */}
+          <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold text-muted-foreground uppercase tracking-wider py-1 px-1">
+            <div>Thứ 2</div>
+            <div>Thứ 3</div>
+            <div>Thứ 4</div>
+            <div>Thứ 5</div>
+            <div>Thứ 6</div>
+            <div>Thứ 7</div>
+            <div className="text-primary">Chủ Nhật</div>
+          </div>
+
+          {/* Month 7x5 or 7x6 Grid */}
+          <div className="grid grid-cols-7 gap-2">
+            {monthGridDays.map((day) => {
+              const dayEvents = events.filter((e) => e.date === day.dateStr);
+              return (
+                <div
+                  key={day.dateStr}
+                  onDragOver={handleDragOver}
+                  onDrop={() => handleDropOnDate(day.dateStr)}
+                  className={`group relative flex flex-col min-h-[120px] sm:min-h-[135px] p-2 rounded-2xl border transition-all select-none ${
+                    day.isToday
+                      ? 'bg-primary/5 border-primary/40 ring-1 ring-primary/20'
+                      : day.isCurrentMonth
+                      ? 'bg-card/70 border-border/60 hover:border-border/90'
+                      : 'bg-muted/20 border-border/30 opacity-45 hover:opacity-80'
+                  }`}
+                >
+                  {/* Day Cell Header */}
+                  <div className="flex items-center justify-between pb-1.5 border-b border-border/30">
+                    <span
+                      className={`h-6 w-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                        day.isToday
+                          ? 'bg-primary text-primary-foreground shadow-xs'
+                          : day.isCurrentMonth
+                          ? 'text-foreground'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      {day.dayNumber}
+                    </span>
+
+                    {/* Quick Add Button */}
+                    <button
+                      onClick={() => {
+                        setEventDate(day.dateStr);
+                        setShowCreateModal(true);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 h-5 w-5 rounded-lg hover:bg-primary/10 text-muted-foreground hover:text-primary flex items-center justify-center transition-all"
+                      title="Thêm lịch học ngày này"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  </div>
+
+                  {/* Day Events Stack */}
+                  <div className="flex-1 space-y-1.5 mt-1.5 overflow-hidden">
+                    {dayEvents.slice(0, 3).map((ev) => {
+                      const col = SUBJECT_COLORS[ev.color] || SUBJECT_COLORS.blue;
+                      const isDone = ev.status === 'completed';
+                      const isMissed = ev.status === 'missed';
+
+                      return (
+                        <div
+                          key={ev.id}
+                          draggable
+                          onDragStart={() => setDraggedEventId(ev.id)}
+                          onClick={() => setSelectedEvent(ev)}
+                          className={`px-1.5 py-1 rounded-lg border text-[11px] font-medium cursor-pointer transition-all flex items-center justify-between gap-1 truncate ${col.bg} ${col.border} ${
+                            isDone ? 'opacity-50 line-through' : isMissed ? 'border-rose-500/50 bg-rose-500/10' : 'hover:scale-101'
+                          }`}
+                          title={`${ev.title} (${ev.start_time.slice(0, 5)} - ${ev.end_time.slice(0, 5)})`}
+                        >
+                          <span className={`truncate ${col.text}`}>{ev.title}</span>
+                          <span className="font-mono text-[9px] text-muted-foreground shrink-0">
+                            {ev.start_time.slice(0, 5)}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {dayEvents.length > 3 && (
+                      <button
+                        onClick={() => {
+                          setCurrentDate(day.date);
+                          setViewMode('day');
+                        }}
+                        className="text-[10px] text-primary font-semibold hover:underline block w-full text-left pl-1"
+                      >
+                        +{dayEvents.length - 3} buổi khác
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 2. CALENDAR VIEW: WEEK VIEW                               */}
       {/* ========================================================= */}
       {viewMode === 'week' && (
-        <div className="grid grid-cols-1 sm:grid-cols-7 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-7 gap-3 animate-in fade-in duration-200">
           {weekDays.map((day) => {
             const dayEvents = events.filter((e) => e.date === day.dateStr);
             return (
@@ -570,10 +757,137 @@ export default function SmartCalendarPage() {
       )}
 
       {/* ========================================================= */}
-      {/* CALENDAR VIEW: AGENDA LIST VIEW                            */}
+      {/* 3. CALENDAR VIEW: DAY VIEW                                */}
+      {/* ========================================================= */}
+      {viewMode === 'day' && (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          {/* Day View Info Banner */}
+          <div className="p-4 rounded-2xl bg-card/80 border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold text-lg shrink-0">
+                {currentDate.getDate()}
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-foreground">
+                  {headerTitleText}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Tổng số: <strong className="text-foreground">{dayViewEvents.length}</strong> buổi học • Tổng thời gian: <strong className="text-foreground">{totalDayMinutes}</strong> phút
+                </p>
+              </div>
+            </div>
+
+            <Button
+              onClick={() => {
+                setEventDate(dayViewDateStr);
+                setShowCreateModal(true);
+              }}
+              size="sm"
+              className="gap-1.5 rounded-xl self-start sm:self-auto"
+            >
+              <Plus className="h-4 w-4" /> Thêm buổi học cho ngày này
+            </Button>
+          </div>
+
+          {/* Day Events Timeline */}
+          {dayViewEvents.length === 0 ? (
+            <Card className="border-dashed">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <CalendarDays className="h-10 w-10 text-muted-foreground/40 mb-3" />
+                <p className="text-sm font-medium">Chưa có lịch học nào trong ngày này</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Hãy thêm buổi học hoặc dùng trợ lý AI để tự động lên lịch học tối ưu.
+                </p>
+                <Button
+                  onClick={() => {
+                    setEventDate(dayViewDateStr);
+                    setShowCreateModal(true);
+                  }}
+                  size="sm"
+                  className="mt-4 rounded-xl"
+                >
+                  <Plus className="h-4 w-4 mr-1" /> Thêm lịch học ngay
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {dayViewEvents.map((ev) => {
+                const col = SUBJECT_COLORS[ev.color] || SUBJECT_COLORS.blue;
+                const isDone = ev.status === 'completed';
+                const isMissed = ev.status === 'missed';
+
+                return (
+                  <Card
+                    key={ev.id}
+                    className={`border-border/60 transition-all bg-card/80 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                      isDone ? 'opacity-65' : ''
+                    }`}
+                  >
+                    <div className="flex items-start sm:items-center gap-4 min-w-0">
+                      <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 ${col.bg} ${col.text}`}>
+                        {ev.subject.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className={`font-bold text-base text-foreground ${isDone ? 'line-through' : ''}`}>
+                            {ev.title}
+                          </h4>
+                          <Badge variant="outline" className="text-[11px]">{ev.subject}</Badge>
+                          {ev.topic && <Badge variant="secondary" className="text-[10px]">{ev.topic}</Badge>}
+                          {ev.is_recurring && (
+                            <Badge variant="outline" className="text-[10px] gap-1">
+                              <RotateCw className="h-3 w-3" /> Lặp lại
+                            </Badge>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-primary" />
+                          <span>{ev.start_time.slice(0, 5)} - {ev.end_time.slice(0, 5)} ({ev.duration_minutes} phút)</span>
+                        </p>
+
+                        {ev.description && (
+                          <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2 bg-muted/30 p-2 rounded-xl border border-border/40">
+                            {ev.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Status & Actions */}
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <Button
+                        size="sm"
+                        variant={isDone ? 'default' : 'outline'}
+                        onClick={() => handleStatusChange(ev, isDone ? 'todo' : 'completed')}
+                        className="rounded-xl h-8 text-xs font-semibold gap-1"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> {isDone ? 'Đã xong' : 'Hoàn thành'}
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setSelectedEvent(ev)}
+                        className="rounded-xl h-8 text-xs text-muted-foreground"
+                      >
+                        Chi tiết
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 4. CALENDAR VIEW: AGENDA LIST VIEW                        */}
       {/* ========================================================= */}
       {viewMode === 'agenda' && (
-        <div className="space-y-3">
+        <div className="space-y-3 animate-in fade-in duration-200">
           {events.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
@@ -665,7 +979,7 @@ export default function SmartCalendarPage() {
               </div>
             </div>
 
-            {/* Recurring Event Options (Requirement IX) */}
+            {/* Recurring Event Options */}
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-2.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="recurringCheck" className="text-xs font-semibold cursor-pointer flex items-center gap-1.5">
@@ -698,7 +1012,7 @@ export default function SmartCalendarPage() {
               )}
             </div>
 
-            {/* Reminder Options (Requirement XI) */}
+            {/* Reminder Options */}
             <div className="p-3.5 rounded-2xl bg-muted/40 border border-border/60 space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="reminderCheck" className="text-xs font-semibold cursor-pointer flex items-center gap-1.5">
