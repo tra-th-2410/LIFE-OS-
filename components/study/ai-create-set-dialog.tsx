@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -22,19 +22,38 @@ interface AiCreateSetDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: (newSet: StudySet) => void;
+  initialContent?: string;
+  initialSubject?: string;
+  initialTopic?: string;
 }
 
-export function AiCreateSetDialog({ open, onOpenChange, onSuccess }: AiCreateSetDialogProps) {
+export function AiCreateSetDialog({
+  open,
+  onOpenChange,
+  onSuccess,
+  initialContent = '',
+  initialSubject = 'math',
+  initialTopic = '',
+}: AiCreateSetDialogProps) {
   const { user } = useAuth();
 
   const [step, setStep] = useState<'prompt' | 'review'>('prompt');
-  const [promptContent, setPromptContent] = useState('');
-  const [subject, setSubject] = useState<string>('math');
-  const [topic, setTopic] = useState('');
+  const [promptContent, setPromptContent] = useState(initialContent);
+  const [subject, setSubject] = useState<string>(initialSubject || 'math');
+  const [topic, setTopic] = useState(initialTopic);
   const [count, setCount] = useState<number>(10);
   const [questionType, setQuestionType] = useState<QuestionType | 'mixed'>('mixed');
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Sync initial props when dialog opens or initial props change
+  useEffect(() => {
+    if (open) {
+      if (initialContent) setPromptContent(initialContent);
+      if (initialSubject) setSubject(initialSubject);
+      if (initialTopic) setTopic(initialTopic);
+    }
+  }, [open, initialContent, initialSubject, initialTopic]);
 
   // Review step state
   const [generatedTitle, setGeneratedTitle] = useState('');

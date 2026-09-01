@@ -68,20 +68,18 @@ export default function SignupPage() {
       if (signupError) throw signupError;
       if (!data.user) throw new Error('Unable to create your account.');
 
-      // Prepare profile
-      const { error: profileError } = await supabase.from('profiles').upsert(
-        {
-          id: data.user.id,
-          username: username.trim(),
-          display_name: fullName.trim(),
-          full_name: fullName.trim(),
-          verification_status: 'basic',
-        },
-        { onConflict: 'id' }
-      );
-
-      if (profileError && profileError.code === '23505') {
-        throw new Error('That username is already taken. Please choose another username.');
+      // If active session exists, refresh profile
+      if (data.session) {
+        await supabase.from('profiles').upsert(
+          {
+            id: data.user.id,
+            username: username.trim(),
+            display_name: fullName.trim(),
+            full_name: fullName.trim(),
+            verification_status: 'basic',
+          },
+          { onConflict: 'id' }
+        );
       }
 
       // If email confirmation is required (session is null or email not confirmed yet)

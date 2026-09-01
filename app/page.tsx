@@ -434,7 +434,7 @@ export default function LandingPage() {
                     <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
                     <div className="absolute bottom-0 left-0 right-0 p-6">
                       <p className="text-white font-medium text-lg">
-                        "I finally have a place online that makes me feel better, not worse."
+                        &ldquo;I finally have a place online that makes me feel better, not worse.&rdquo;
                       </p>
                       <p className="text-white/70 text-sm mt-1">— Maya, 16, student</p>
                     </div>

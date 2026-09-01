@@ -50,15 +50,27 @@ export function JournalFeed() {
     try {
       let query = supabase
         .from('journal_entries')
-        .select('*, author:profiles!journal_entries_user_id_fkey(username, avatar_url, verification_status)')
+        .select('*, author:profiles!journal_entries_user_id_fkey(username, display_name, avatar_url, verification_status)')
         .order('created_at', { ascending: false });
 
       if (activeTab === 'mine') {
         query = query.eq('user_id', user.id);
       } else if (activeTab === 'public') {
         query = query.eq('visibility', 'public');
+      } else if (activeTab === 'friends') {
+        // Fetch confirmed friend IDs to strictly restrict feed
+        const { data: friendRows } = await supabase
+          .from('friendships')
+          .select('user_id, friend_id')
+          .eq('status', 'accepted')
+          .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`);
+
+        const friendIds = (friendRows || []).map((r: any) =>
+          r.user_id === user.id ? r.friend_id : r.user_id
+        );
+        const allowedUserIds = [user.id, ...friendIds];
+        query = query.in('user_id', allowedUserIds).in('visibility', ['friends', 'public']);
       }
-      // Note: For 'friends', Supabase RLS policy automatically filters entries to (own OR public OR friends)
 
       const { data: rawData, error } = await query;
       if (error) throw error;

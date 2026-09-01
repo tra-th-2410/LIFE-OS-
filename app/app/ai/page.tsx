@@ -191,7 +191,7 @@ export default function AiCenterPage() {
                         Gợi ý:
                       </p>
                       <p className="text-xs text-muted-foreground/90 truncate">
-                        "{botConfig.suggestions[0]}"
+                        &ldquo;{botConfig.suggestions[0]}&rdquo;
                       </p>
                     </div>
                   )}

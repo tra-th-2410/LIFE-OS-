@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,23 +24,24 @@ import {
   Upload,
   Plus,
   Sparkles,
-  Bot,
   Search,
   Download,
   Trash2,
-  Calendar,
-  Brain,
-  CheckCircle2,
+  ExternalLink,
+  FileSpreadsheet,
+  FileCode,
+  Image as ImageIcon,
+  File,
   Loader2,
 } from 'lucide-react';
-import { createStudySet, createStudyQuestionsBatch } from '@/lib/study';
-import { createCalendarEvent } from '@/lib/calendar';
-import type { StudyMaterial } from '@/lib/types';
+import { AiCreateSetDialog } from './ai-create-set-dialog';
+import type { StudyMaterial, StudySet } from '@/lib/types';
 import { formatRelativeTime } from '@/lib/helpers';
 import { toast } from 'sonner';
 
 export function StudyLibraryView() {
   const { user } = useAuth();
+  const router = useRouter();
   const [materials, setMaterials] = useState<StudyMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -51,10 +53,14 @@ export function StudyLibraryView() {
   const [materialSubject, setMaterialSubject] = useState('Toán');
   const [materialTopic, setMaterialTopic] = useState('');
   const [materialSummary, setMaterialSummary] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [generatingAiSet, setGeneratingAiSet] = useState<Record<string, boolean>>({});
 
-  const fileRef = useRef<HTMLInputElement>(null);
+  // AI Dialog state triggered from material
+  const [aiDialogMat, setAiDialogMat] = useState<StudyMaterial | null>(null);
+  const [showAiDialog, setShowAiDialog] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadMaterials = useCallback(async () => {
     if (!user) return;
@@ -66,45 +72,10 @@ export function StudyLibraryView() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
-      if (error) {
-        // Fallback realistic seed materials if empty
-        setMaterials([
-          {
-            id: 'mat-1',
-            user_id: user.id,
-            title: 'Tóm tắt Công thức Giải tích 12 & Khảo sát hàm số',
-            subject: 'Toán',
-            topic: 'Khảo sát hàm số',
-            file_name: 'Giai_Tich_12_Cong_Thuc.pdf',
-            file_path: null,
-            file_type: 'pdf',
-            file_size: 2400000,
-            content_summary: 'Bao gồm toàn bộ quy tắc đạo hàm, điều kiện cực trị, tiệm cận đứng, tiệm cận ngang và các dạng toán tương giao đồ thị.',
-            ai_analysis: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            id: 'mat-2',
-            user_id: user.id,
-            title: '3000 Từ vựng IELTS Cốt lõi theo Chủ đề (Band 7.0+)',
-            subject: 'Tiếng Anh',
-            topic: 'IELTS Vocabulary',
-            file_name: 'IELTS_Vocab_Mastery.docx',
-            file_path: null,
-            file_type: 'docx',
-            file_size: 1800000,
-            content_summary: 'Từ vựng học thuật theo các chủ đề: Environment, Technology, Education, Crime, Society.',
-            ai_analysis: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ]);
-      } else {
-        setMaterials((data as StudyMaterial[]) ?? []);
-      }
+      if (error) throw error;
+      setMaterials((data as StudyMaterial[]) ?? []);
     } catch (err) {
-      console.error(err);
+      console.error('Error loading study materials:', err);
     } finally {
       setLoading(false);
     }
@@ -114,120 +85,178 @@ export function StudyLibraryView() {
     loadMaterials();
   }, [loadMaterials]);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFile(file);
+    if (!materialTitle.trim()) {
+      // Auto-set title from file name (strip extension)
+      const baseName = file.name.replace(/\.[^/.]+$/, '');
+      setMaterialTitle(baseName);
+    }
+
+    // Auto-detect subject hint from name
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.includes('toan') || lowerName.includes('math') || lowerName.includes('giai tich') || lowerName.includes('hinh hoc')) {
+      setMaterialSubject('Toán');
+    } else if (lowerName.includes('anh') || lowerName.includes('english') || lowerName.includes('ielts') || lowerName.includes('toeic')) {
+      setMaterialSubject('Tiếng Anh');
+    } else if (lowerName.includes('ly') || lowerName.includes('physics')) {
+      setMaterialSubject('Vật lý');
+    } else if (lowerName.includes('hoa') || lowerName.includes('chemistry')) {
+      setMaterialSubject('Hóa học');
+    } else if (lowerName.includes('tin') || lowerName.includes('code') || lowerName.includes('it')) {
+      setMaterialSubject('Tin học');
+    }
+  };
+
   const handleUploadMaterial = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !materialTitle.trim()) return;
+    if (!user || !materialTitle.trim()) {
+      toast.error('Vui lòng nhập tên tài liệu');
+      return;
+    }
+
     setUploading(true);
     try {
+      let filePath: string | null = null;
+      let fileName: string | null = selectedFile ? selectedFile.name : `${materialTitle.trim()}.pdf`;
+      let fileType: string = 'document';
+      let fileSize: number = selectedFile ? selectedFile.size : 0;
+      let mimeType: string = selectedFile ? selectedFile.type : 'application/octet-stream';
+
+      if (selectedFile) {
+        const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'bin';
+        fileType = ext;
+        const sanitizedName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `${user.id}/${Date.now()}_${sanitizedName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('study_materials')
+          .upload(storagePath, selectedFile, {
+            cacheControl: '3600',
+            upsert: false,
+          });
+
+        if (uploadError) {
+          console.error('Storage upload error:', uploadError);
+          toast.error('Lỗi khi tải file lên kho lưu trữ: ' + uploadError.message);
+          setUploading(false);
+          return;
+        }
+
+        const { data: publicUrlData } = supabase.storage
+          .from('study_materials')
+          .getPublicUrl(storagePath);
+
+        filePath = publicUrlData?.publicUrl || storagePath;
+      }
+
       const { data, error } = await supabase
         .from('study_materials')
         .insert({
           user_id: user.id,
           title: materialTitle.trim(),
-          subject: materialSubject,
-          topic: materialTopic.trim() || undefined,
-          content_summary: materialSummary.trim(),
-          file_name: `${materialTitle.trim()}.pdf`,
+          subject: materialSubject.trim(),
+          topic: materialTopic.trim() || null,
+          content_summary: materialSummary.trim() || null,
+          file_name: fileName,
+          file_path: filePath,
+          file_type: fileType,
+          file_size: fileSize,
+          mime_type: mimeType,
         })
         .select()
         .single();
 
-      if (!error && data) {
-        setMaterials([data as StudyMaterial, ...materials]);
-      } else {
-        const localMat: StudyMaterial = {
-          id: `mat-${Date.now()}`,
-          user_id: user.id,
-          title: materialTitle.trim(),
-          subject: materialSubject,
-          topic: materialTopic.trim() || null,
-          file_name: `${materialTitle.trim()}.pdf`,
-          file_path: null,
-          file_type: 'pdf',
-          file_size: 1500000,
-          content_summary: materialSummary.trim(),
-          ai_analysis: null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-        setMaterials([localMat, ...materials]);
+      if (error) {
+        console.error('DB insert error:', error);
+        toast.error('Không thể lưu thông tin tài liệu: ' + error.message);
+      } else if (data) {
+        setMaterials((prev) => [data as StudyMaterial, ...prev]);
+        toast.success('Đã tải lên và lưu tài liệu vào Thư viện thành công!');
+        setShowUploadModal(false);
+        setMaterialTitle('');
+        setMaterialTopic('');
+        setMaterialSummary('');
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
-
-      setShowUploadModal(false);
-      setMaterialTitle('');
-      setMaterialTopic('');
-      setMaterialSummary('');
-      toast.success('Đã lưu tài liệu vào Thư viện học tập!');
-    } catch {
-      toast.error('Lỗi khi lưu tài liệu');
+    } catch (err: any) {
+      console.error('Upload exception:', err);
+      toast.error('Có lỗi xảy ra trong quá trình tải tài liệu');
     } finally {
       setUploading(false);
     }
   };
 
-  // AI Pipeline: Generate Quiz & Flashcards from Material
-  const handleAiGenerateFromMaterial = async (mat: StudyMaterial) => {
-    if (!user) return;
-    setGeneratingAiSet((prev) => ({ ...prev, [mat.id]: true }));
+  const handleDeleteMaterial = async (mat: StudyMaterial) => {
+    if (!confirm(`Bạn có chắc chắn muốn xóa tài liệu "${mat.title}"?`)) return;
+
     try {
-      const createdSet = await createStudySet({
-        user_id: user.id,
-        title: `[Tự động từ tài liệu] ${mat.title}`,
-        subject: mat.subject || 'other',
-        topic: mat.topic || null,
-        description: `Tạo tự động từ tài liệu: ${mat.title}`,
-        default_type: 'multiple_choice',
-      });
+      // 1. Delete record from database
+      const { error } = await supabase
+        .from('study_materials')
+        .delete()
+        .eq('id', mat.id)
+        .eq('user_id', user?.id);
 
-      if (createdSet) {
-        // Generate sample MCQs
-        await createStudyQuestionsBatch([
-          {
-            set_id: createdSet.id,
-            type: 'multiple_choice',
-            question: `Dựa trên nội dung "${mat.title}", phát biểu nào sau đây là chính xác nhất?`,
-            answer: null,
-            options: {
-              A: 'Hàm số đồng biến khi đạo hàm luôn dương trên khoảng xác định',
-              B: 'Hàm số luôn có cực trị tại mọi điểm đạo hàm bằng 0',
-              C: 'Tiệm cận đứng là giới hạn khi x tiến tới vô cùng',
-              D: 'Đạo hàm cấp 2 luôn dương với mọi hàm số',
-            },
-            correct_option: 'A',
-            explanation: 'Theo định lý về tính đơn điệu, nếu f\'(x) > 0 với mọi x thuộc (a,b) thì hàm số đồng biến trên (a,b).',
-            sort_order: 0,
-            metadata: { topic: mat.topic || 'Tổng quan' },
-          },
-          {
-            set_id: createdSet.id,
-            type: 'multiple_choice',
-            question: `Phương pháp tối ưu nhất để ghi nhớ và vận dụng kiến thức "${mat.topic || mat.title}" là gì?`,
-            answer: null,
-            options: {
-              A: 'Chỉ đọc lướt một lần',
-              B: 'Luyện tập giải đề ngắt quãng (Spaced Repetition) và ghi chú flashcard',
-              C: 'Học thuộc lòng từng câu chữ không cần hiểu',
-              D: 'Bỏ qua các dạng bài vận dụng cao',
-            },
-            correct_option: 'B',
-            explanation: 'Spaced Repetition và Active Recall là hai kỹ thuật học tập hiệu quả nhất đã được chứng minh khoa học.',
-            sort_order: 1,
-            metadata: { topic: mat.topic || 'Kỹ năng học' },
-          },
-        ]);
+      if (error) throw error;
 
-        toast.success(`🎉 AI đã chuyển đổi tài liệu thành Bộ câu hỏi trắc nghiệm! Hãy vào mục Quiz để làm bài.`);
+      // 2. Cleanup file from storage if path exists
+      if (mat.file_path && mat.file_path.includes('/study_materials/')) {
+        const parts = mat.file_path.split('/study_materials/');
+        if (parts[1]) {
+          await supabase.storage.from('study_materials').remove([parts[1]]);
+        }
       }
-    } catch {
-      toast.error('Lỗi khi tạo bộ câu hỏi từ tài liệu');
-    } finally {
-      setGeneratingAiSet((prev) => ({ ...prev, [mat.id]: false }));
+
+      setMaterials((prev) => prev.filter((m) => m.id !== mat.id));
+      toast.success('Đã xóa tài liệu khỏi Thư viện');
+    } catch (err: any) {
+      console.error('Delete error:', err);
+      toast.error('Không thể xóa tài liệu: ' + (err.message || ''));
     }
   };
 
+  const handleOpenAiGenerator = (mat: StudyMaterial) => {
+    setAiDialogMat(mat);
+    setShowAiDialog(true);
+  };
+
+  const handleAiSetSuccess = (newSet: StudySet) => {
+    setShowAiDialog(false);
+    setAiDialogMat(null);
+    toast.success(`Đã tạo thành công bộ học "${newSet.title}"! Đang chuyển đến trang luyện tập...`);
+    router.push(`/app/study/sets/${newSet.id}`);
+  };
+
+  const getFileIcon = (fileType?: string | null) => {
+    const t = (fileType || '').toLowerCase();
+    if (t.includes('pdf')) return <FileText className="h-5 w-5 text-red-500" />;
+    if (t.includes('doc') || t.includes('word')) return <FileText className="h-5 w-5 text-blue-500" />;
+    if (t.includes('xls') || t.includes('sheet')) return <FileSpreadsheet className="h-5 w-5 text-emerald-500" />;
+    if (t.includes('ppt') || t.includes('powerpoint')) return <FileText className="h-5 w-5 text-orange-500" />;
+    if (t.includes('png') || t.includes('jpg') || t.includes('jpeg') || t.includes('image')) return <ImageIcon className="h-5 w-5 text-purple-500" />;
+    if (t.includes('txt') || t.includes('code')) return <FileCode className="h-5 w-5 text-cyan-500" />;
+    return <File className="h-5 w-5 text-primary" />;
+  };
+
+  const formatFileSize = (bytes?: number | null) => {
+    if (!bytes || bytes <= 0) return '0 KB';
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const filteredMaterials = materials.filter((m) => {
-    const matchSub = selectedSubject === 'all' || m.subject.toLowerCase() === selectedSubject.toLowerCase();
-    const matchQ = !search || m.title.toLowerCase().includes(search.toLowerCase()) || (m.content_summary || '').toLowerCase().includes(search.toLowerCase());
+    const matchSub = selectedSubject === 'all' || (m.subject || '').toLowerCase() === selectedSubject.toLowerCase();
+    const matchQ =
+      !search ||
+      (m.title || '').toLowerCase().includes(search.toLowerCase()) ||
+      (m.topic || '').toLowerCase().includes(search.toLowerCase()) ||
+      (m.content_summary || '').toLowerCase().includes(search.toLowerCase()) ||
+      (m.file_name || '').toLowerCase().includes(search.toLowerCase());
     return matchSub && matchQ;
   });
 
@@ -238,12 +267,12 @@ export function StudyLibraryView() {
         <div>
           <h2 className="text-2xl font-display font-bold">Thư viện tài liệu học tập</h2>
           <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-            Lưu trữ giáo trình, ghi chú PDF/Word và sử dụng AI để tự động tạo Flashcards & Đề trắc nghiệm.
+            Lưu trữ tài liệu PDF, Word, PowerPoint, Excel, Ghi chú và sử dụng AI để tự động tạo Flashcards & Đề trắc nghiệm.
           </p>
         </div>
 
         <Button onClick={() => setShowUploadModal(true)} className="gap-1.5 rounded-xl">
-          <Upload className="h-4 w-4" /> Thêm tài liệu mới
+          <Upload className="h-4 w-4" /> Tải lên tài liệu
         </Button>
       </div>
 
@@ -252,7 +281,7 @@ export function StudyLibraryView() {
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Tìm kiếm tài liệu, công thức, tóm tắt..."
+            placeholder="Tìm kiếm tài liệu, bài tập, công thức..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10 h-10 rounded-xl"
@@ -260,7 +289,7 @@ export function StudyLibraryView() {
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          {['all', 'Toán', 'Tiếng Anh', 'Vật lý', 'Hóa học', 'Tin học'].map((sub) => (
+          {['all', 'Toán', 'Tiếng Anh', 'Vật lý', 'Hóa học', 'Sinh học', 'Tin học', 'Ngữ văn', 'Lịch sử', 'Địa lý'].map((sub) => (
             <button
               key={sub}
               onClick={() => setSelectedSubject(sub)}
@@ -277,16 +306,22 @@ export function StudyLibraryView() {
       </div>
 
       {/* Material Cards Grid */}
-      {filteredMaterials.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-40 rounded-2xl animate-shimmer" />
+          ))}
+        </div>
+      ) : filteredMaterials.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <BookOpen className="h-10 w-10 text-muted-foreground/40 mb-3" />
-            <p className="text-sm font-medium">Chưa có tài liệu nào</p>
+            <p className="text-sm font-medium">Chưa có tài liệu nào trong thư viện</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Thêm ghi chú hoặc tài liệu học tập để AI giúp bạn tóm tắt và sinh bộ câu hỏi!
+              Tải lên file giáo trình, đề cương hoặc tóm tắt để AI tạo bộ câu hỏi trắc nghiệm và flashcards cho bạn!
             </p>
             <Button onClick={() => setShowUploadModal(true)} size="sm" className="mt-4 rounded-xl">
-              <Plus className="h-4 w-4 mr-1" /> Tải tài liệu lên
+              <Plus className="h-4 w-4 mr-1" /> Tải tài liệu lên ngay
             </Button>
           </CardContent>
         </Card>
@@ -295,42 +330,64 @@ export function StudyLibraryView() {
           {filteredMaterials.map((mat) => (
             <Card key={mat.id} className="border-border/60 bg-card/80 p-5 space-y-3.5 hover:border-primary/40 transition-all">
               <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
-                    <FileText className="h-5 w-5" />
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="h-11 w-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
+                    {getFileIcon(mat.file_type)}
                   </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-foreground line-clamp-1 leading-snug">{mat.title}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-sm text-foreground truncate leading-snug">{mat.title}</h3>
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="text-[10px]">{mat.subject}</Badge>
+                      <Badge variant="outline" className="text-[10px]">{mat.subject || 'Tổng hợp'}</Badge>
                       {mat.topic && <span>• {mat.topic}</span>}
+                      {mat.file_size ? <span>• {formatFileSize(mat.file_size)}</span> : null}
                     </div>
                   </div>
                 </div>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleDeleteMaterial(mat)}
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive shrink-0"
+                  title="Xóa tài liệu"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
 
-              {mat.content_summary && (
+              {mat.content_summary ? (
                 <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed bg-muted/30 p-2.5 rounded-xl border border-border/40">
                   {mat.content_summary}
                 </p>
-              )}
+              ) : mat.file_name ? (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 truncate">
+                  <File className="h-3.5 w-3.5 shrink-0" /> {mat.file_name}
+                </p>
+              ) : null}
 
-              {/* AI Conversion Pipeline Button */}
-              <div className="flex items-center justify-between pt-2 border-t border-border/40">
-                <span className="text-[11px] text-muted-foreground">{formatRelativeTime(mat.created_at)}</span>
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-border/40 gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-muted-foreground">{formatRelativeTime(mat.created_at)}</span>
+                  {mat.file_path && (
+                    <a
+                      href={mat.file_path}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                    >
+                      <Download className="h-3 w-3" /> Mở / Tải về
+                    </a>
+                  )}
+                </div>
 
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => handleAiGenerateFromMaterial(mat)}
-                  disabled={generatingAiSet[mat.id]}
+                  onClick={() => handleOpenAiGenerator(mat)}
                   className="rounded-xl h-8 text-xs font-semibold gap-1.5 border-primary/30 bg-primary/5 hover:bg-primary/10 text-primary shadow-xs"
                 >
-                  {generatingAiSet[mat.id] ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
-                  )}
+                  <Sparkles className="h-3.5 w-3.5" />
                   AI sinh Quiz & Flashcards
                 </Button>
               </div>
@@ -341,19 +398,57 @@ export function StudyLibraryView() {
 
       {/* Upload Dialog */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[540px]">
           <DialogHeader>
-            <DialogTitle>Thêm tài liệu vào Thư viện</DialogTitle>
-            <DialogDescription>Nhập tiêu đề ghi chú hoặc tóm tắt tài liệu để quản lý.</DialogDescription>
+            <DialogTitle>Tải lên tài liệu học tập</DialogTitle>
+            <DialogDescription>
+              Hỗ trợ file PDF, Word (.doc, .docx), PowerPoint (.ppt, .pptx), Excel (.xls, .xlsx), Text (.txt) hoặc Ảnh tài liệu.
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleUploadMaterial} className="space-y-4 pt-2">
+            {/* File Picker */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Chọn file tài liệu</Label>
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${
+                  selectedFile
+                    ? 'border-primary/40 bg-primary/5'
+                    : 'border-border/60 hover:border-primary/30 bg-card/60'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileChange}
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,image/*"
+                  className="hidden"
+                />
+                {selectedFile ? (
+                  <div className="flex items-center justify-center gap-2 text-foreground font-medium text-sm">
+                    {getFileIcon(selectedFile.name.split('.').pop())}
+                    <span className="truncate max-w-[280px]">{selectedFile.name}</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {formatFileSize(selectedFile.size)}
+                    </Badge>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <Upload className="h-6 w-6 text-muted-foreground mx-auto" />
+                    <p className="text-xs font-medium text-foreground">Click để chọn file từ thiết bị của bạn</p>
+                    <p className="text-[10px] text-muted-foreground">PDF, DOCX, PPTX, XLSX, TXT, PNG, JPG (Tối đa 50MB)</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Tên tài liệu / Ghi chú *</Label>
               <Input
                 value={materialTitle}
                 onChange={(e) => setMaterialTitle(e.target.value)}
-                placeholder="VD: Tổng hợp công thức Hình học không gian..."
+                placeholder="VD: Tổng hợp công thức Hình học không gian 12..."
                 required
               />
             </div>
@@ -374,20 +469,38 @@ export function StudyLibraryView() {
               <Textarea
                 value={materialSummary}
                 onChange={(e) => setMaterialSummary(e.target.value)}
-                placeholder="Dán nội dung bài giảng hoặc công thức cốt lõi tại đây..."
-                rows={4}
+                placeholder="Dán nội dung bài giảng, tóm tắt lý thuyết hoặc công thức cốt lõi tại đây..."
+                rows={3}
               />
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setShowUploadModal(false)}>Hủy</Button>
               <Button type="submit" disabled={uploading || !materialTitle.trim()}>
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Lưu tài liệu'}
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" /> Đang tải lên...
+                  </>
+                ) : (
+                  'Tải lên & Lưu tài liệu'
+                )}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* AI Create Set Dialog triggered from a Material */}
+      {showAiDialog && (
+        <AiCreateSetDialog
+          open={showAiDialog}
+          onOpenChange={setShowAiDialog}
+          onSuccess={handleAiSetSuccess}
+          initialContent={aiDialogMat?.content_summary || aiDialogMat?.title || ''}
+          initialSubject={aiDialogMat?.subject || 'general'}
+          initialTopic={aiDialogMat?.topic || aiDialogMat?.title || ''}
+        />
+      )}
     </div>
   );
 }

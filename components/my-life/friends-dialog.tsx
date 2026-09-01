@@ -126,16 +126,19 @@ export function FriendsDialog({ open, onOpenChange }: FriendsDialogProps) {
     if (!user || !searchQuery.trim()) return;
     setSearching(true);
     try {
-      const { data } = await supabase
+      const q = searchQuery.trim();
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .neq('id', user.id)
-        .ilike('username', `%${searchQuery.trim()}%`)
-        .limit(10);
+        .or(`username.ilike.%${q}%,display_name.ilike.%${q}%,full_name.ilike.%${q}%`)
+        .limit(20);
 
+      if (error) throw error;
       setSearchResults((data as Profile[]) ?? []);
-    } catch {
-      toast.error('Lỗi khi tìm kiếm');
+    } catch (err) {
+      console.error('Error searching users:', err);
+      toast.error('Lỗi khi tìm kiếm người dùng');
     } finally {
       setSearching(false);
     }

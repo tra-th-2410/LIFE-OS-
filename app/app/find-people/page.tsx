@@ -95,9 +95,10 @@ export default function FindPeoplePage() {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-medium">{p.username}</p>
-                        {p.verification_status === 'verified' && <Badge className="gap-1 bg-success/10 text-success text-xs">Verified</Badge>}
+                        <p className="font-medium truncate">{p.display_name || p.username}</p>
+                        {p.verification_status === 'verified' && <Badge className="gap-1 bg-success/10 text-success text-xs shrink-0">Verified</Badge>}
                       </div>
+                      <p className="text-[11px] text-muted-foreground">@{p.username}</p>
                       {p.bio && <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{p.bio}</p>}
                       {p.interests.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-2">

@@ -174,6 +174,7 @@ export default function CommunityPage() {
   // 7. Live Chat Rooms & Direct Messages State
   const [selectedChatId, setSelectedChatId] = useState<string | null>(initialGroupId || null);
   const [selectedChatType, setSelectedChatType] = useState<'group' | 'direct'>('group');
+  const [selectedDirectFriend, setSelectedDirectFriend] = useState<Profile | null>(null);
   const [chatMessages, setChatMessages] = useState<StudyGroupMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [sendingChatMessage, setSendingChatMessage] = useState(false);
@@ -609,6 +610,42 @@ export default function CommunityPage() {
     }
   };
 
+  const handleSelectDirectFriend = async (friend: Profile) => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setSelectedDirectFriend(friend);
+    setSelectedChatType('direct');
+    setLoadingChatMessages(true);
+
+    try {
+      const { data: roomData, error } = await supabase.rpc('get_or_create_direct_room', {
+        p_other_user_id: friend.id,
+      });
+
+      if (error) {
+        console.error('Error creating direct room:', error);
+        toast.error('Không thể mở phòng chat riêng: ' + error.message);
+        setLoadingChatMessages(false);
+        return;
+      }
+
+      if (roomData && (roomData as any).id) {
+        const directRoom = roomData as StudyGroup;
+        setSelectedChatId(directRoom.id);
+        setStudyGroups((prev) => {
+          if (prev.some((g) => g.id === directRoom.id)) return prev;
+          return [directRoom, ...prev];
+        });
+      }
+    } catch (err: any) {
+      console.error('Error selecting direct friend:', err);
+      toast.error('Lỗi khi mở phòng trò chuyện trực tiếp');
+      setLoadingChatMessages(false);
+    }
+  };
+
   const handleSendChatMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim() || !selectedChatId || !user || sendingChatMessage) return;
@@ -629,15 +666,23 @@ export default function CommunityPage() {
         .select('*, sender:profiles(id, username, display_name, avatar_url)')
         .single();
 
-      if (!error && data) {
+      if (error) {
+        console.error('Error sending message:', error);
+        toast.error(`Không gửi được tin nhắn: ${error.message || 'Lỗi hệ thống'}`);
+        setChatInput(content);
+        return;
+      }
+
+      if (data) {
         setChatMessages((prev) => {
           if (prev.some((m) => m.id === data.id)) return prev;
           return [...prev, data as StudyGroupMessage];
         });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error sending message:', err);
       toast.error('Không gửi được tin nhắn');
+      setChatInput(content);
     } finally {
       setSendingChatMessage(false);
     }
@@ -646,14 +691,28 @@ export default function CommunityPage() {
   // Filtered Study Groups
   const filteredStudyGroups = useMemo(() => {
     if (groupFilter === 'my') {
-      return studyGroups.filter((g) => joinedGroupIds.has(g.id) || g.creator_id === user?.id);
+      return studyGroups.filter((g) => !g.is_direct && (joinedGroupIds.has(g.id) || g.creator_id === user?.id));
     }
-    return studyGroups;
+    return studyGroups.filter((g) => !g.is_direct);
   }, [studyGroups, groupFilter, joinedGroupIds, user]);
 
   const activeGroup = useMemo(() => {
+    if (selectedChatType === 'direct' && selectedDirectFriend) {
+      return {
+        id: selectedChatId || '',
+        name: getDisplayName(selectedDirectFriend),
+        description: `Trò chuyện trực tiếp với @${selectedDirectFriend.username}`,
+        slug: `dm-${selectedDirectFriend.username}`,
+        avatar_url: selectedDirectFriend.avatar_url,
+        subject: 'direct',
+        creator_id: user?.id || null,
+        members_count: 2,
+        created_at: '',
+        updated_at: '',
+      } as StudyGroup;
+    }
     return studyGroups.find((g) => g.id === selectedChatId) || null;
-  }, [studyGroups, selectedChatId]);
+  }, [studyGroups, selectedChatId, selectedChatType, selectedDirectFriend, user]);
 
   // Clean 7 Tab definitions (strictly removing Recent Activity)
   const tabItems = [
@@ -1115,7 +1174,7 @@ export default function CommunityPage() {
                   </p>
                   {studyGroups.length === 0 ? (
                     <div className="p-3 text-xs text-muted-foreground text-center">
-                      Chưa có phòng chat nào. Nhấn "+ Tạo phòng" để bắt đầu!
+                      Chưa có phòng chat nào. Nhấn &ldquo;+ Tạo phòng&rdquo; để bắt đầu!
                     </div>
                   ) : (
                     studyGroups.map((g) => {
@@ -1151,31 +1210,35 @@ export default function CommunityPage() {
                   <p className="px-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                     Tin nhắn trực tiếp
                   </p>
-                  {friends.slice(0, 5).map((friend) => (
-                    <button
-                      key={friend.id}
-                      onClick={() => {
-                        setSelectedChatId(friend.id);
-                        setSelectedChatType('direct');
-                      }}
-                      className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition-all ${
-                        selectedChatId === friend.id && selectedChatType === 'direct'
-                          ? 'bg-primary/15 text-primary font-semibold'
-                          : 'hover:bg-muted/60 text-foreground'
-                      }`}
-                    >
-                      <Avatar className="h-8 w-8 shrink-0">
-                        {friend.avatar_url && <AvatarImage src={friend.avatar_url} />}
-                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-bold">
-                          {initials(getDisplayName(friend))}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold truncate">{getDisplayName(friend)}</p>
-                        <p className="text-[10px] text-muted-foreground truncate">@{friend.username}</p>
-                      </div>
-                    </button>
-                  ))}
+                  {friends.length === 0 ? (
+                    <p className="px-2 text-xs text-muted-foreground italic py-1">Chưa có bạn bè nào</p>
+                  ) : (
+                    friends.slice(0, 8).map((friend) => {
+                      const isSelected = selectedChatType === 'direct' && selectedDirectFriend?.id === friend.id;
+                      return (
+                        <button
+                          key={friend.id}
+                          onClick={() => handleSelectDirectFriend(friend)}
+                          className={`w-full flex items-center gap-2.5 p-2 rounded-xl text-left transition-all ${
+                            isSelected
+                              ? 'bg-primary/15 text-primary font-semibold'
+                              : 'hover:bg-muted/60 text-foreground'
+                          }`}
+                        >
+                          <Avatar className="h-8 w-8 shrink-0">
+                            {friend.avatar_url && <AvatarImage src={friend.avatar_url} />}
+                            <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-bold">
+                              {initials(getDisplayName(friend))}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold truncate">{getDisplayName(friend)}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">@{friend.username}</p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               </div>
             </div>

@@ -92,7 +92,53 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     load();
-  }, [load]);
+
+    if (!user) return;
+
+    // Realtime subscription for incoming notifications
+    const channel = supabase
+      .channel(`notifications-page-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newNotif = payload.new as Notification;
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === newNotif.id)) return prev;
+              return [newNotif, ...prev];
+            });
+            if (newNotif.title) {
+              toast.info(newNotif.title, {
+                description: newNotif.body ?? undefined,
+              });
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const updated = payload.new as Notification;
+            setNotifications((prev) =>
+              prev.map((n) => (n.id === updated.id ? { ...n, ...updated } : n))
+            );
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            const deletedId = (payload.old as { id?: string }).id;
+            if (deletedId) {
+              setNotifications((prev) => prev.filter((n) => n.id !== deletedId));
+            } else {
+              load();
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, load]);
 
   const handleMarkAllRead = async () => {
     if (!user) return;
@@ -132,24 +178,27 @@ export default function NotificationsPage() {
 
   // Filter notifications
   const filteredNotifications = notifications.filter((n) => {
+    if (!n || !n.type) return false;
+    const typeStr = String(n.type).toLowerCase();
     if (filterTab === 'unread') return !n.is_read;
     if (filterTab === 'calendar') {
       return (
-        n.type.includes('calendar') ||
-        n.type.includes('schedule') ||
-        n.type.includes('reminder') ||
-        n.type.includes('study')
+        typeStr.includes('calendar') ||
+        typeStr.includes('schedule') ||
+        typeStr.includes('reminder') ||
+        typeStr.includes('study')
       );
     }
     if (filterTab === 'challenges') {
-      return n.type.includes('challenge') || n.type.includes('streak') || n.type.includes('report');
+      return typeStr.includes('challenge') || typeStr.includes('streak') || typeStr.includes('report');
     }
     if (filterTab === 'community') {
       return (
-        n.type.includes('friend') ||
-        n.type.includes('comment') ||
-        n.type.includes('post') ||
-        n.type.includes('forum')
+        typeStr.includes('friend') ||
+        typeStr.includes('comment') ||
+        typeStr.includes('post') ||
+        typeStr.includes('forum') ||
+        typeStr.includes('chat')
       );
     }
     return true;
@@ -158,19 +207,23 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const renderIcon = (type: string) => {
-    if (type.includes('calendar') || type.includes('schedule') || type.includes('reminder')) {
+    const t = String(type || '').toLowerCase();
+    if (t.includes('calendar') || t.includes('schedule') || t.includes('reminder')) {
       return <Clock className="h-5 w-5 text-blue-500" />;
     }
-    if (type.includes('streak') || type.includes('flame')) {
+    if (t.includes('streak') || t.includes('flame')) {
       return <Flame className="h-5 w-5 text-orange-500" />;
     }
-    if (type.includes('report') || type.includes('chart')) {
+    if (t.includes('report') || t.includes('chart')) {
       return <BarChart3 className="h-5 w-5 text-purple-500" />;
     }
-    if (type.includes('friend') || type.includes('community')) {
+    if (t.includes('friend') || t.includes('community')) {
       return <Users className="h-5 w-5 text-emerald-500" />;
     }
-    if (type.includes('ai') || type.includes('coach')) {
+    if (t.includes('chat') || t.includes('message')) {
+      return <MessageSquare className="h-5 w-5 text-teal-500" />;
+    }
+    if (t.includes('ai') || t.includes('coach')) {
       return <Bot className="h-5 w-5 text-primary" />;
     }
     return <Bell className="h-5 w-5 text-primary" />;

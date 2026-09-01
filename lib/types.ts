@@ -753,6 +753,7 @@ export interface StudyMaterial {
   file_path: string | null;
   file_type: string | null;
   file_size: number;
+  mime_type?: string | null;
   content_summary: string | null;
   ai_analysis: Record<string, unknown> | null;
   created_at: string;
@@ -775,6 +776,9 @@ export interface StudyGroup {
   subject: string;
   creator_id: string | null;
   members_count: number;
+  is_direct?: boolean;
+  direct_user1?: string | null;
+  direct_user2?: string | null;
   created_at: string;
   updated_at: string;
 }
