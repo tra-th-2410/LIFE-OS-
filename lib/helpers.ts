@@ -142,27 +142,22 @@ export function calculateHabitStreak(completedDates: string[]): number {
  * local development (localhost) and production (Netlify / custom domain).
  */
 export function getSiteUrl(): string {
-  // 1. Explicit env configuration (e.g. from NEXT_PUBLIC_SITE_URL or NEXT_PUBLIC_URL)
+  // 1. Client-side browser resolution (dynamically adapts to localhost or current production/preview domain)
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const origin = window.location.origin;
+    if (origin && origin !== 'null' && origin !== 'about:blank') {
+      return origin.replace(/\/+$/, '');
+    }
+  }
+
+  // 2. Explicit env configuration (e.g. from NEXT_PUBLIC_SITE_URL or NEXT_PUBLIC_URL)
   const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL;
   if (envUrl && envUrl.trim()) {
     return envUrl.trim().replace(/\/+$/, '');
   }
 
-  // 2. Client-side browser resolution
-  if (typeof window !== 'undefined' && window.location) {
-    const hostname = window.location.hostname;
-    // If running in development on localhost/127.0.0.1
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return window.location.origin;
-    }
-    // If running in production browser
-    if (window.location.origin && !window.location.origin.includes('localhost')) {
-      return window.location.origin;
-    }
-  }
-
   // 3. Production fallback (Netlify URL)
-  return 'https://bejewelled-froyo-d5b8de.netlify.app';
+  return 'https://life-os-study.netlify.app';
 }
 
 /**

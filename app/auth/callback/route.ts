@@ -2,25 +2,31 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 function getRedirectBaseUrl(request: NextRequest): string {
-  // 1. Explicit env configuration
+  // 1. Netlify / Vercel forwarded headers
+  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  if (forwardedHost) {
+    if (forwardedHost.includes('localhost') || forwardedHost.includes('127.0.0.1')) {
+      return `http://${forwardedHost}`;
+    }
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  // 2. Request URL origin
+  try {
+    const reqUrl = new URL(request.url);
+    if (reqUrl.origin && reqUrl.origin !== 'null') {
+      return reqUrl.origin;
+    }
+  } catch {}
+
+  // 3. Explicit env configuration
   if (process.env.NEXT_PUBLIC_SITE_URL && process.env.NEXT_PUBLIC_SITE_URL.trim()) {
     return process.env.NEXT_PUBLIC_SITE_URL.trim().replace(/\/+$/, '');
   }
 
-  // 2. Netlify / Vercel forwarded headers
-  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  if (forwardedHost && !forwardedHost.includes('localhost') && !forwardedHost.includes('127.0.0.1')) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  // 3. If local development
-  if (forwardedHost && (forwardedHost.includes('localhost') || forwardedHost.includes('127.0.0.1'))) {
-    return `http://${forwardedHost}`;
-  }
-
   // 4. Fallback production URL
-  return 'https://bejewelled-froyo-d5b8de.netlify.app';
+  return 'https://life-os-study.netlify.app';
 }
 
 export async function GET(request: NextRequest) {
