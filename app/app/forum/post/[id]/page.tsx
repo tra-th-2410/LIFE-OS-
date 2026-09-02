@@ -13,8 +13,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   ArrowLeft, Loader2, MessageSquare, Heart, HandHeart, Lightbulb, Sparkles, Bookmark,
-  Flag, Share2, Trash2, Pencil, Send, EyeOff, Paperclip, Download, X,
+  Flag, Share2, Trash2, Pencil, Send, EyeOff, Paperclip, Download, X, MoreVertical,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import type { ForumPost, ForumComment, ForumCategory, Profile, ForumReactionType, ForumPostAttachment, ForumPostReaction } from '@/lib/types';
 import { formatRelativeTime, initials } from '@/lib/helpers';
@@ -69,6 +83,8 @@ export default function ForumPostPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
   const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [showDeletePostModal, setShowDeletePostModal] = useState(false);
+  const [deletingPostLoading, setDeletingPostLoading] = useState(false);
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState('');
 
@@ -283,16 +299,18 @@ export default function ForumPostPage() {
     }
   };
 
-  const handleDeletePost = async () => {
+  const handleConfirmDeletePost = async () => {
     if (!user || !post) return;
-    if (!confirm(t('Are you sure you want to delete this post? This cannot be undone.'))) return;
+    setDeletingPostLoading(true);
     try {
-      const { error } = await supabase.from('forum_posts').delete().eq('id', postId);
+      const { error } = await supabase.from('forum_posts').delete().eq('id', postId).eq('author_id', user.id);
       if (error) throw error;
       toast.success(t('Post deleted'));
       router.push('/app/forum');
-    } catch {
+    } catch (err: any) {
+      console.error(err);
       toast.error(t('Failed to delete post'));
+      setDeletingPostLoading(false);
     }
   };
 
@@ -358,7 +376,7 @@ export default function ForumPostPage() {
     );
   }
 
-  const isOwner = user?.id === post.author_id;
+  const isOwner = Boolean(user && (user.id === post.author_id || user.id === post.author?.id));
   const displayName = post.is_anonymous ? t('Anonymous Student') : (post.author?.username ?? t('Unknown'));
   const avatarInit = post.is_anonymous ? 'A' : initials(post.author?.username ?? 'U');
 
@@ -403,10 +421,34 @@ export default function ForumPostPage() {
               </div>
             </div>
             {isOwner && !editing && (
-              <div className="flex gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setEditTitle(post.title); setEditContent(post.content); setEditing(true); }}><Pencil className="h-3.5 w-3.5" /></Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={handleDeletePost}><Trash2 className="h-3.5 w-3.5" /></Button>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground">
+                    <MoreVertical className="h-4 w-4" />
+                    <span className="sr-only">Options</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-36">
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setEditTitle(post.title);
+                      setEditContent(post.content);
+                      setEditing(true);
+                    }}
+                    className="gap-2 cursor-pointer"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    <span>{t('Edit')}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setShowDeletePostModal(true)}
+                    className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>{t('Delete')}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
           </div>
 
@@ -589,6 +631,26 @@ export default function ForumPostPage() {
           </Card>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeletePostModal} onOpenChange={setShowDeletePostModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('Delete Post')}</DialogTitle>
+            <DialogDescription>
+              {t('Are you sure you want to delete this post? This action cannot be undone.')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeletePostModal(false)} disabled={deletingPostLoading}>
+              {t('Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDeletePost} disabled={deletingPostLoading}>
+              {deletingPostLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

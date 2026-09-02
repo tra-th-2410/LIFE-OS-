@@ -197,11 +197,17 @@ export default function NotificationsPage() {
 
   const renderIcon = (type: string) => {
     const tIcon = String(type || '').toLowerCase();
-    if (tIcon.includes('calendar') || tIcon.includes('schedule') || tIcon.includes('reminder')) {
-      return <Clock className="h-5 w-5 text-blue-500" />;
-    }
     if (tIcon.includes('streak') || tIcon.includes('flame')) {
       return <Flame className="h-5 w-5 text-orange-500" />;
+    }
+    if (tIcon.includes('completed') || tIcon.includes('trophy')) {
+      return <Trophy className="h-5 w-5 text-amber-500" />;
+    }
+    if (tIcon.includes('challenge')) {
+      return <BookOpen className="h-5 w-5 text-indigo-500" />;
+    }
+    if (tIcon.includes('calendar') || tIcon.includes('schedule') || tIcon.includes('reminder')) {
+      return <Clock className="h-5 w-5 text-blue-500" />;
     }
     if (tIcon.includes('report') || tIcon.includes('chart')) {
       return <BarChart3 className="h-5 w-5 text-purple-500" />;

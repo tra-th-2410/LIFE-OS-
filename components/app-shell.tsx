@@ -99,6 +99,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 toast.info(notif.title, {
                   description: notif.body ?? undefined,
                 });
+
+                // Desktop / Browser native notification if permission granted
+                if (
+                  typeof window !== 'undefined' &&
+                  'Notification' in window &&
+                  Notification.permission === 'granted'
+                ) {
+                  try {
+                    new Notification(notif.title, {
+                      body: notif.body ?? undefined,
+                      icon: '/favicon.ico',
+                    });
+                  } catch {
+                    // Ignore desktop notification error
+                  }
+                }
               }
             }
           }

@@ -38,7 +38,17 @@ import {
   UserPlus,
   Send,
   Sparkles,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  EyeOff,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type {
   Community,
   ForumCategory,
@@ -147,6 +157,15 @@ export default function CommunityPage() {
   const [forumPostCategory, setForumPostCategory] = useState('');
   const [forumPostAnonymous, setForumPostAnonymous] = useState(false);
   const [creatingForumPost, setCreatingForumPost] = useState(false);
+
+  // Forum Post Edit / Delete State
+  const [editingForumPost, setEditingForumPost] = useState<(ForumPost & { author?: Profile | null; category?: ForumCategory | null }) | null>(null);
+  const [editForumTitle, setEditForumTitle] = useState('');
+  const [editForumContent, setEditForumContent] = useState('');
+  const [editForumCategoryId, setEditForumCategoryId] = useState('');
+  const [savingEditForum, setSavingEditForum] = useState(false);
+  const [deletingForumPost, setDeletingForumPost] = useState<(ForumPost & { author?: Profile | null; category?: ForumCategory | null }) | null>(null);
+  const [deletingForumLoading, setDeletingForumLoading] = useState(false);
 
   // 3. Study Groups State & Join Flow
   const [studyGroups, setStudyGroups] = useState<StudyGroup[]>([]);
@@ -497,6 +516,73 @@ export default function CommunityPage() {
       toast.error('Không thể đăng bài. Vui lòng thử lại.');
     } finally {
       setCreatingForumPost(false);
+    }
+  };
+
+  const handleStartEditForumPost = (post: ForumPost & { author?: Profile | null; category?: ForumCategory | null }) => {
+    setEditingForumPost(post);
+    setEditForumTitle(post.title || '');
+    setEditForumContent(post.content || '');
+    setEditForumCategoryId(post.category_id || (forumCategories[0]?.id ?? ''));
+  };
+
+  const handleSaveEditForumPost = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !editingForumPost) return;
+    if (!editForumTitle.trim() || !editForumContent.trim()) {
+      toast.error('Vui lòng nhập tiêu đề và nội dung bài viết');
+      return;
+    }
+    setSavingEditForum(true);
+    try {
+      const { data, error } = await supabase
+        .from('forum_posts')
+        .update({
+          title: editForumTitle.trim(),
+          content: editForumContent.trim(),
+          category_id: editForumCategoryId || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingForumPost.id)
+        .eq('author_id', user.id)
+        .select('*, author:profiles!forum_posts_author_id_fkey(username, display_name, avatar_url, id), category:forum_categories!forum_posts_category_id_fkey(*)')
+        .single();
+
+      if (error) throw error;
+
+      setForumPosts((prev) =>
+        prev.map((p) => (p.id === editingForumPost.id ? (data as any) : p))
+      );
+      setEditingForumPost(null);
+      toast.success('Đã cập nhật bài thảo luận thành công!');
+    } catch (err: any) {
+      console.error('Error updating forum post:', err);
+      toast.error('Không thể cập nhật bài viết. ' + (err?.message || ''));
+    } finally {
+      setSavingEditForum(false);
+    }
+  };
+
+  const handleConfirmDeleteForumPost = async () => {
+    if (!user || !deletingForumPost) return;
+    setDeletingForumLoading(true);
+    try {
+      const { error } = await supabase
+        .from('forum_posts')
+        .delete()
+        .eq('id', deletingForumPost.id)
+        .eq('author_id', user.id);
+
+      if (error) throw error;
+
+      setForumPosts((prev) => prev.filter((p) => p.id !== deletingForumPost.id));
+      setDeletingForumPost(null);
+      toast.success('Đã xóa bài thảo luận thành công!');
+    } catch (err: any) {
+      console.error('Error deleting forum post:', err);
+      toast.error('Không thể xóa bài viết. ' + (err?.message || ''));
+    } finally {
+      setDeletingForumLoading(false);
     }
   };
 
@@ -961,9 +1047,10 @@ export default function CommunityPage() {
                   return matchCat && matchSearch;
                 })
                 .map((p) => {
+                  const isOwner = Boolean(user && (user.id === p.author_id || user.id === p.author?.id));
                   const authorDisplay = p.is_anonymous ? 'Sinh viên ẩn danh' : getDisplayName(p.author, 'Bạn học');
                   return (
-                    <Card key={p.id} className="border-border/60 hover:border-primary/40 hover:shadow-xs transition-all bg-card/80">
+                    <Card key={p.id} className="border-border/60 hover:border-primary/40 hover:shadow-xs transition-all bg-card/80 group relative">
                       <CardContent className="p-4 sm:p-5">
                         <div className="flex items-start gap-3">
                           <Avatar className="h-9 w-9 shrink-0">
@@ -976,27 +1063,75 @@ export default function CommunityPage() {
                           </Avatar>
 
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap text-xs">
-                              <span className="font-semibold text-foreground">{authorDisplay}</span>
-                              <span className="text-muted-foreground">• {formatRelativeTime(p.created_at)}</span>
-                              {p.category && (
-                                <Badge variant="secondary" className="text-[10px] gap-1">
-                                  {p.category.icon} {p.category.name}
-                                </Badge>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <span className="font-semibold text-foreground">{authorDisplay}</span>
+                                <span className="text-muted-foreground">• {formatRelativeTime(p.created_at)}</span>
+                                {p.is_anonymous && (
+                                  <Badge variant="outline" className="text-[10px] gap-1 border-muted-foreground/30 text-muted-foreground">
+                                    <EyeOff className="h-2.5 w-2.5" /> Ẩn danh
+                                  </Badge>
+                                )}
+                                {p.category && (
+                                  <Badge variant="secondary" className="text-[10px] gap-1">
+                                    {p.category.icon} {p.category.name}
+                                  </Badge>
+                                )}
+                              </div>
+
+                              {/* Owner Edit / Delete Menu (available for both anonymous and public posts) */}
+                              {isOwner && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                      <span className="sr-only">Tùy chọn</span>
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-36">
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleStartEditForumPost(p);
+                                      }}
+                                      className="gap-2 cursor-pointer"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                      <span>Chỉnh sửa</span>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingForumPost(p);
+                                      }}
+                                      className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      <span>Xóa bài viết</span>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               )}
                             </div>
 
-                            <h3 className="font-bold text-base text-foreground mt-1 leading-snug hover:text-primary transition-colors">
-                              {p.title}
-                            </h3>
-                            <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed whitespace-pre-wrap">
-                              {p.content}
-                            </p>
+                            <Link href={`/app/forum/post/${p.id}`} className="block mt-1">
+                              <h3 className="font-bold text-base text-foreground leading-snug hover:text-primary transition-colors">
+                                {p.title}
+                              </h3>
+                              <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2 leading-relaxed whitespace-pre-wrap">
+                                {p.content}
+                              </p>
+                            </Link>
 
                             <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground pt-1 border-t border-border/40">
-                              <span className="flex items-center gap-1">
+                              <Link href={`/app/forum/post/${p.id}`} className="flex items-center gap-1 hover:text-primary transition-colors">
                                 <MessageSquare className="h-3.5 w-3.5" /> {p.comments_count || 0} phản hồi
-                              </span>
+                              </Link>
                               <span className="flex items-center gap-1">
                                 <Heart className="h-3.5 w-3.5 text-rose-500" /> {p.reactions_count || 0} cảm xúc
                               </span>
@@ -1732,6 +1867,101 @@ export default function CommunityPage() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================= */}
+      {/* DIALOG 5: EDIT FORUM POST                                 */}
+      {/* ========================================================= */}
+      <Dialog open={Boolean(editingForumPost)} onOpenChange={(open) => !open && setEditingForumPost(null)}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>Chỉnh sửa bài thảo luận</DialogTitle>
+            <DialogDescription>
+              Cập nhật tiêu đề hoặc nội dung bài viết của bạn.
+              {editingForumPost?.is_anonymous && ' Bài viết sẽ tiếp tục được giữ ẩn danh.'}
+            </DialogDescription>
+          </DialogHeader>
+          {editingForumPost && (
+            <form onSubmit={handleSaveEditForumPost} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="editPostTitle">Tiêu đề bài viết *</Label>
+                <Input
+                  id="editPostTitle"
+                  value={editForumTitle}
+                  onChange={(e) => setEditForumTitle(e.target.value)}
+                  placeholder="Nhập tiêu đề bài thảo luận..."
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="editPostCat">Chuyên mục</Label>
+                <select
+                  id="editPostCat"
+                  value={editForumCategoryId}
+                  onChange={(e) => setEditForumCategoryId(e.target.value)}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {forumCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.icon} {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="editPostContent">Nội dung bài viết *</Label>
+                <Textarea
+                  id="editPostContent"
+                  value={editForumContent}
+                  onChange={(e) => setEditForumContent(e.target.value)}
+                  placeholder="Nhập nội dung chia sẻ hoặc câu hỏi của bạn..."
+                  rows={6}
+                  required
+                />
+              </div>
+
+              {editingForumPost.is_anonymous && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/40 border border-border/40 text-xs text-muted-foreground">
+                  <EyeOff className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>Bài viết này được đăng dưới chế độ <strong>Ẩn danh</strong>. Danh tính của bạn sẽ không bị tiết lộ.</span>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingForumPost(null)}>
+                  Hủy
+                </Button>
+                <Button type="submit" disabled={savingEditForum || !editForumTitle.trim() || !editForumContent.trim()}>
+                  {savingEditForum ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Lưu thay đổi'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========================================================= */}
+      {/* DIALOG 6: DELETE FORUM POST CONFIRMATION                  */}
+      {/* ========================================================= */}
+      <Dialog open={Boolean(deletingForumPost)} onOpenChange={(open) => !open && setDeletingForumPost(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Xóa bài thảo luận?</DialogTitle>
+            <DialogDescription>
+              Bạn có chắc chắn muốn xóa bài viết &ldquo;{deletingForumPost?.title}&rdquo; không? Hành động này không thể hoàn tác và tất cả bình luận liên quan sẽ bị xóa.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingForumPost(null)} disabled={deletingForumLoading}>
+              Hủy
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDeleteForumPost} disabled={deletingForumLoading}>
+              {deletingForumLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Xóa bài viết'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

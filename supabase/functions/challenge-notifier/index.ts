@@ -40,7 +40,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const { data, error } = await supabase.rpc(functionName);
+    const force = url.searchParams.get("force") === "true";
+    const rpcParams = job === "daily" ? { p_force: force } : {};
+
+    const { data, error } = await supabase.rpc(functionName, rpcParams);
 
     if (error) {
       return new Response(

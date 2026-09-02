@@ -4,11 +4,42 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Plus, Search, MessageSquare, Heart, Bookmark, Loader2, Clock } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  ArrowLeft,
+  Plus,
+  Search,
+  MessageSquare,
+  Heart,
+  Bookmark,
+  Loader2,
+  Clock,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  EyeOff,
+} from 'lucide-react';
+import { toast } from 'sonner';
 import type { ForumCategory, ForumPost, Profile } from '@/lib/types';
 import { formatRelativeTime, initials } from '@/lib/helpers';
 import { useLanguage } from '@/components/language-provider';
@@ -17,6 +48,7 @@ type SortMode = 'latest' | 'discussed' | 'helpful';
 
 export default function ForumCategoryPage() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const params = useParams();
   const slug = params.slug as string;
   const [category, setCategory] = useState<ForumCategory | null>(null);
@@ -28,6 +60,14 @@ export default function ForumCategoryPage() {
   const [hasMore, setHasMore] = useState(true);
   const PAGE_SIZE = 10;
   const pageRef = useRef(0);
+
+  // Edit / Delete State
+  const [editingPost, setEditingPost] = useState<(ForumPost & { author?: Profile | null }) | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingPost, setDeletingPost] = useState<(ForumPost & { author?: Profile | null }) | null>(null);
+  const [deletingLoading, setDeletingLoading] = useState(false);
 
   useEffect(() => {
     supabase.from('forum_categories').select('*').eq('slug', slug).maybeSingle().then(({ data }) => {
@@ -74,6 +114,71 @@ export default function ForumCategoryPage() {
 
   const handleLoadMore = () => {
     loadPosts(false, pageRef.current);
+  };
+
+  const handleStartEdit = (post: ForumPost & { author?: Profile | null }) => {
+    setEditingPost(post);
+    setEditTitle(post.title || '');
+    setEditContent(post.content || '');
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !editingPost) return;
+    if (!editTitle.trim() || !editContent.trim()) {
+      toast.error(t('Please fill in both title and content'));
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const { data, error } = await supabase
+        .from('forum_posts')
+        .update({
+          title: editTitle.trim(),
+          content: editContent.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingPost.id)
+        .eq('author_id', user.id)
+        .select('*, author:profiles!forum_posts_author_id_fkey(username, avatar_url, id)')
+        .single();
+
+      if (error) throw error;
+
+      setPosts((prev) =>
+        prev.map((p) => (p.id === editingPost.id ? (data as any) : p))
+      );
+      setEditingPost(null);
+      toast.success(t('Post updated'));
+    } catch (err: any) {
+      console.error(err);
+      toast.error(t('Failed to update post'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!user || !deletingPost) return;
+    setDeletingLoading(true);
+    try {
+      const { error } = await supabase
+        .from('forum_posts')
+        .delete()
+        .eq('id', deletingPost.id)
+        .eq('author_id', user.id);
+
+      if (error) throw error;
+
+      setPosts((prev) => prev.filter((p) => p.id !== deletingPost.id));
+      setDeletingPost(null);
+      toast.success(t('Post deleted'));
+    } catch (err: any) {
+      console.error(err);
+      toast.error(t('Failed to delete post'));
+    } finally {
+      setDeletingLoading(false);
+    }
   };
 
   const filtered = search.trim()
@@ -144,34 +249,85 @@ export default function ForumCategoryPage() {
       ) : (
         <div className="space-y-3">
           {filtered.map((p) => {
+            const isOwner = Boolean(user && (user.id === p.author_id || user.id === p.author?.id));
             const displayName = p.is_anonymous ? t('Anonymous Student') : p.author?.username ?? t('Unknown');
             const avatarInit = p.is_anonymous ? 'A' : initials(p.author?.username ?? 'U');
             return (
-              <Link key={p.id} href={`/app/forum/post/${p.id}`}>
-                <Card className="group cursor-pointer border-border/60 hover:border-primary/30 hover:shadow-md transition-all duration-200">
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">{avatarInit}</div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+              <Card key={p.id} className="group relative border-border/60 hover:border-primary/30 hover:shadow-md transition-all duration-200">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">{avatarInit}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-medium">{displayName}</span>
                           <span className="text-xs text-muted-foreground">{formatRelativeTime(p.created_at)}</span>
+                          {p.is_anonymous && (
+                            <Badge variant="outline" className="text-xs gap-1">
+                              <EyeOff className="h-3 w-3" /> Anonymous
+                            </Badge>
+                          )}
                         </div>
+
+                        {/* Owner Actions Menu */}
+                        {isOwner && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                                <span className="sr-only">Options</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-36">
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleStartEdit(p);
+                                }}
+                                className="gap-2 cursor-pointer"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                <span>Edit</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeletingPost(p);
+                                }}
+                                className="gap-2 text-destructive focus:text-destructive cursor-pointer"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+
+                      <Link href={`/app/forum/post/${p.id}`} className="block">
                         <h3 className="font-semibold text-base mt-1 group-hover:text-primary transition-colors">{p.title}</h3>
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{p.content}</p>
-                        {p.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-2">{p.tags.map((t) => <Badge key={t} variant="outline" className="text-xs">#{t}</Badge>)}</div>
-                        )}
-                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" /> {p.comments_count}</span>
-                          <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {p.reactions_count}</span>
-                          <span className="flex items-center gap-1"><Bookmark className="h-3.5 w-3.5" /> {p.bookmark_count}</span>
-                        </div>
+                      </Link>
+
+                      {p.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">{p.tags.map((t) => <Badge key={t} variant="outline" className="text-xs">#{t}</Badge>)}</div>
+                      )}
+                      <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                        <Link href={`/app/forum/post/${p.id}`} className="flex items-center gap-1 hover:text-primary transition-colors">
+                          <MessageSquare className="h-3.5 w-3.5" /> {p.comments_count}
+                        </Link>
+                        <span className="flex items-center gap-1"><Heart className="h-3.5 w-3.5" /> {p.reactions_count}</span>
+                        <span className="flex items-center gap-1"><Bookmark className="h-3.5 w-3.5" /> {p.bookmark_count}</span>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
           {!search && hasMore && (
@@ -179,6 +335,81 @@ export default function ForumCategoryPage() {
           )}
         </div>
       )}
+
+      {/* Edit Post Dialog */}
+      <Dialog open={Boolean(editingPost)} onOpenChange={(open) => !open && setEditingPost(null)}>
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
+            <DialogTitle>{t('Edit Post')}</DialogTitle>
+            <DialogDescription>
+              {t('Make changes to your forum post.')}
+              {editingPost?.is_anonymous && ` ${t('This post will remain anonymous.')}`}
+            </DialogDescription>
+          </DialogHeader>
+          {editingPost && (
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="slugEditTitle">{t('Title')}</Label>
+                <Input
+                  id="slugEditTitle"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder={t('Post title')}
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="slugEditContent">{t('Content')}</Label>
+                <Textarea
+                  id="slugEditContent"
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  placeholder={t('Post content')}
+                  rows={6}
+                  required
+                />
+              </div>
+
+              {editingPost.is_anonymous && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/40 border border-border/40 text-xs text-muted-foreground">
+                  <EyeOff className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span>{t('This post is published anonymously. Your identity remains private.')}</span>
+                </div>
+              )}
+
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setEditingPost(null)}>
+                  {t('Cancel')}
+                </Button>
+                <Button type="submit" disabled={savingEdit || !editTitle.trim() || !editContent.trim()}>
+                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Save Changes')}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={Boolean(deletingPost)} onOpenChange={(open) => !open && setDeletingPost(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('Delete Post')}</DialogTitle>
+            <DialogDescription>
+              {t('Are you sure you want to delete this post? This action cannot be undone.')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingPost(null)} disabled={deletingLoading}>
+              {t('Cancel')}
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete} disabled={deletingLoading}>
+              {deletingLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : t('Delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
