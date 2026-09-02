@@ -165,10 +165,20 @@ export default function StudyPage() {
           .select('*')
           .eq('user_id', user.id);
         const partMap = new Map<string, ChallengeParticipant>();
+        let hasActiveParticipation = false;
         (partData as ChallengeParticipant[])?.forEach((p) => {
           partMap.set(p.challenge_id, p);
+          if (!p.completed) {
+            hasActiveParticipation = true;
+          }
         });
         setParticipations(partMap);
+
+        // Default tab selection: If user has at least 1 active challenge -> 'my', else 'recommended'
+        setActiveChallengeTab((prev) => {
+          if (prev === 'completed') return 'completed';
+          return hasActiveParticipation ? 'my' : 'recommended';
+        });
 
         const challengeIds = chList.map((c) => c.id);
         if (challengeIds.length > 0) {
@@ -1138,25 +1148,62 @@ function CreateChallengeDialog({
         if (error) throw error;
         toast.success('Challenge updated!');
       } else {
-        const { error } = await supabase.from('challenges').insert({
-          title,
-          description,
-          type: 'milestone',
-          duration_days: duration,
-          icon,
-          color: 'blue',
-          creator_id: userId,
-          category,
-          start_date: startDate,
-          status: 'active',
-        });
-        if (error) throw error;
-        toast.success('Challenge created!');
+        const { data: newChallenge, error: insertChError } = await supabase
+          .from('challenges')
+          .insert({
+            title: title.trim(),
+            description: description.trim(),
+            type: 'milestone',
+            duration_days: duration,
+            icon,
+            color: 'blue',
+            creator_id: userId,
+            category,
+            start_date: startDate,
+            status: 'active',
+          })
+          .select('*')
+          .single();
+
+        if (insertChError || !newChallenge) {
+          throw insertChError || new Error('Không thể tạo thử thách');
+        }
+
+        // Check if participant already exists to prevent duplicate insertion
+        const { data: existingPart } = await supabase
+          .from('challenge_participants')
+          .select('challenge_id')
+          .eq('challenge_id', newChallenge.id)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (!existingPart) {
+          const { error: partError } = await supabase
+            .from('challenge_participants')
+            .insert({
+              challenge_id: newChallenge.id,
+              user_id: userId,
+              progress: 0,
+              streak: 0,
+              completed: false,
+              round: 1,
+            });
+
+          if (partError) {
+            throw new Error(`Đã tạo thử thách nhưng không thể tham gia: ${partError.message}`);
+          }
+
+          // Increment challenge participants count
+          await supabase.rpc('increment_challenge_participants', { challenge_id: newChallenge.id }).then(() => {}, () => {});
+        }
+
+        toast.success('Thử thách đã được tạo và bạn đã tham gia thành công!');
       }
       onOpenChange(false);
       onCreated();
-    } catch {
-      toast.error('Failed to save challenge');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không thể lưu thử thách';
+      toast.error(msg);
     } finally {
       setSubmitting(false);
     }

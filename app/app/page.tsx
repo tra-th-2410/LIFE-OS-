@@ -7,31 +7,41 @@ import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Target, Trophy, Bot, BookOpen, TrendingUp, ArrowRight, Sparkles, Heart } from 'lucide-react';
+import { Users, Target, Trophy, Bot, BookOpen, TrendingUp, ArrowRight, Sparkles, Heart, Flame } from 'lucide-react';
 import { formatRelativeTime } from '@/lib/helpers';
 import { useLanguage } from '@/components/language-provider';
-import type { Community, Challenge, Project } from '@/lib/types';
+import type { Community, Challenge, ChallengeParticipant, Project } from '@/lib/types';
 
 export default function AppHomePage() {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const { t } = useLanguage();
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [activeChallenges, setActiveChallenges] = useState<(ChallengeParticipant & { challenge?: Challenge })[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       supabase.from('communities').select('*').is('archived_at', null).order('members_count', { ascending: false }).limit(6),
-      supabase.from('challenges').select('*').limit(4),
+      user
+        ? supabase
+            .from('challenge_participants')
+            .select('*, challenge:challenges(*)')
+            .eq('user_id', user.id)
+            .eq('completed', false)
+            .order('joined_at', { ascending: false })
+            .limit(4)
+        : Promise.resolve({ data: [] }),
       supabase.from('projects').select('*').eq('status', 'recruiting').limit(4),
     ]).then(([cRes, chRes, pRes]) => {
       setCommunities((cRes.data as Community[]) ?? []);
-      setChallenges((chRes.data as Challenge[]) ?? []);
+      const rawParts = (chRes.data as (ChallengeParticipant & { challenge?: Challenge })[]) ?? [];
+      const validParts = rawParts.filter((p) => p.challenge && p.challenge.status !== 'archived');
+      setActiveChallenges(validParts);
       setProjects((pRes.data as Project[]) ?? []);
       setLoading(false);
     });
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
@@ -160,30 +170,81 @@ export default function AppHomePage() {
       {/* Active Challenges */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-display font-bold">Active Challenges</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-display font-bold">Active Challenges</h2>
+            {activeChallenges.length > 0 && (
+              <Badge variant="secondary" className="text-xs">
+                {activeChallenges.length} {t('active')}
+              </Badge>
+            )}
+          </div>
           <Link href="/app/study">
             <Button variant="ghost" size="sm" className="gap-1">View all <ArrowRight className="h-3.5 w-3.5" /></Button>
           </Link>
         </div>
-        {challenges.length === 0 ? (
-          <EmptyState icon={Trophy} text="No challenges yet" />
+        {activeChallenges.length === 0 ? (
+          <Card className="border-dashed border-border/70 bg-card/50">
+            <CardContent className="flex flex-col items-center justify-center py-10 text-center space-y-3">
+              <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                <Trophy className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">Bạn chưa tham gia thử thách nào</p>
+                <p className="text-xs text-muted-foreground max-w-sm">
+                  Rèn luyện thói quen học tập, nâng cao streak và duy trì mục tiêu mỗi ngày!
+                </p>
+              </div>
+              <Link href="/app/study">
+                <Button size="sm" className="rounded-xl gap-1.5 mt-1 font-medium">
+                  Khám phá thử thách <ArrowRight className="h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {challenges.map((ch) => (
-              <Link key={ch.id} href="/app/study">
-                <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 h-full">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-2xl">{ch.icon}</span>
-                      <Badge variant="outline" className="text-xs gap-1"><Trophy className="h-3 w-3" />{ch.duration_days}d</Badge>
-                    </div>
-                    <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">{ch.title}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{ch.description}</p>
-                    <p className="mt-2 text-xs text-muted-foreground">{ch.participants_count} {t('joined')}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+            {activeChallenges.map((part) => {
+              const ch = part.challenge;
+              if (!ch) return null;
+              return (
+                <Link key={part.challenge_id} href="/app/study">
+                  <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 h-full">
+                    <CardContent className="p-4 space-y-2.5">
+                      <div className="flex items-start justify-between">
+                        <span className="text-2xl">{ch.icon || '🎯'}</span>
+                        <Badge variant="outline" className="text-[11px] gap-1 font-medium">
+                          <Trophy className="h-3 w-3 text-amber-500" />
+                          {ch.duration_days}d
+                        </Badge>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm group-hover:text-primary transition-colors line-clamp-1">
+                          {ch.title}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                          {ch.description || 'Thử thách rèn luyện hàng ngày'}
+                        </p>
+                      </div>
+                      <div className="pt-2 border-t border-border/40 space-y-1.5 text-xs">
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span className="flex items-center gap-1 font-medium">
+                            <Flame className={`h-3.5 w-3.5 ${part.streak > 0 ? 'text-amber-500 fill-amber-500' : ''}`} />
+                            Streak: {part.streak || 0} ngày
+                          </span>
+                          <span className="font-semibold text-foreground">{part.progress || 0}%</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-300"
+                            style={{ width: `${part.progress || 0}%` }}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>
