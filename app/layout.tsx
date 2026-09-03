@@ -1,16 +1,12 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/components/theme-provider';
 import { AuthProvider } from '@/components/auth-provider';
 import { LanguageProvider } from '@/components/language-provider';
 import { Toaster } from '@/components/ui/sonner';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ['latin'],
-  variable: '--font-display',
-});
 
 export const metadata: Metadata = {
   title: 'Life OS — A Social OS for Young Learners',
@@ -30,7 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${inter.variable} ${jakarta.variable} font-sans`}
+        className={`${inter.variable} font-sans`}
         suppressHydrationWarning
       >
         <ThemeProvider
@@ -39,7 +35,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <LanguageProvider><AuthProvider>{children}</AuthProvider></LanguageProvider>
+          <LanguageProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </LanguageProvider>
           <Toaster />
         </ThemeProvider>
       </body>
