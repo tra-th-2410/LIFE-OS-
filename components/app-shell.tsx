@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
   BookOpen,
+  Calendar,
   Users,
   Bot,
   Heart,
@@ -41,6 +42,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/app', label: 'Home', labelVi: 'Trang chủ', icon: Home },
   { href: '/app/study', label: 'Study', labelVi: 'Học tập', icon: BookOpen },
+  { href: '/app/calendar', label: 'Calendar', labelVi: 'Lịch', icon: Calendar },
   { href: '/app/community', label: 'Community', labelVi: 'Cộng đồng', icon: Users },
   { href: '/app/ai', label: 'AI', labelVi: 'Trí tuệ nhân tạo', icon: Bot },
   { href: '/app/my-life', label: 'My Life', labelVi: 'Cuộc sống', icon: Heart },
@@ -288,7 +290,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 function SidebarNavFallback() {
   return (
     <div className="flex-1 space-y-2 p-4">
-      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
         <div key={i} className="h-9 rounded-xl bg-white/5 animate-pulse" />
       ))}
     </div>
@@ -316,6 +318,9 @@ function SidebarContent({
     }
     if (href === '/app/study') {
       return pathname.startsWith('/app/study');
+    }
+    if (href === '/app/calendar') {
+      return pathname.startsWith('/app/calendar');
     }
     if (href === '/app/community') {
       return pathname.startsWith('/app/community');
