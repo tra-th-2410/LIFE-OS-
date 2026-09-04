@@ -350,12 +350,12 @@ export default function AppHomePage() {
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* Header */}
           <div className="space-y-1.5">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#26302B]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground dark:text-[#F5F5F2]">
               {language === 'vi'
                 ? 'Chào mừng bạn đến với Life OS 👋'
                 : 'Welcome to Life OS 👋'}
             </h1>
-            <p className="text-sm sm:text-base text-[#788078] max-w-2xl">
+            <p className="text-sm sm:text-base text-muted-foreground max-w-2xl">
               {language === 'vi'
                 ? 'Đây là không gian để bạn học tập, xây dựng thói quen và quản lý cuộc sống theo cách của riêng mình.'
                 : 'Your dedicated space to learn, build sustainable habits, and manage your life with clarity.'}
@@ -499,10 +499,10 @@ export default function AppHomePage() {
           {/* Active User Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#26302B]">
+              <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground dark:text-[#F5F5F2]">
                 {greetingText}
               </h1>
-              <p className="text-sm text-[#788078]">
+              <p className="text-sm text-muted-foreground">
                 {language === 'vi'
                   ? 'Hôm nay bạn muốn hoàn thành điều gì?'
                   : 'What would you like to achieve today?'}
