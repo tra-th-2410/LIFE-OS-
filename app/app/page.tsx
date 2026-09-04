@@ -330,12 +330,12 @@ export default function AppHomePage() {
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto space-y-6">
-        <div className="h-12 w-1/3 rounded-2xl bg-[#E5E1D7]/50 animate-pulse" />
-        <div className="h-44 w-full rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
+        <div className="h-12 w-1/3 rounded-2xl bg-muted/60 animate-pulse" />
+        <div className="h-44 w-full rounded-2xl bg-card border border-border animate-pulse" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="h-28 rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
-          <div className="h-28 rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
-          <div className="h-28 rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
+          <div className="h-28 rounded-2xl bg-card border border-border animate-pulse" />
+          <div className="h-28 rounded-2xl bg-card border border-border animate-pulse" />
+          <div className="h-28 rounded-2xl bg-card border border-border animate-pulse" />
         </div>
       </div>
     );
@@ -363,20 +363,20 @@ export default function AppHomePage() {
           </div>
 
           {/* Hero Panel */}
-          <div className="relative overflow-hidden rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-7 sm:p-10 shadow-xs">
+          <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-7 sm:p-10 shadow-xs">
             {/* Subtle organic sage decorative shape */}
-            <div className="absolute right-0 top-0 -mt-12 -mr-12 h-64 w-64 rounded-full bg-[#DDE8DF]/40 blur-2xl pointer-events-none" />
+            <div className="absolute right-0 top-0 -mt-12 -mr-12 h-64 w-64 rounded-full bg-[#DDE8DF]/40 dark:bg-[#7D9B8A]/15 blur-2xl pointer-events-none" />
             <div className="absolute right-24 bottom-0 -mb-8 h-40 w-40 rounded-full bg-[#7D9B8A]/10 blur-xl pointer-events-none" />
 
             <div className="relative z-10 max-w-xl space-y-4">
-              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#DDE8DF] text-[#24302B] text-2xl shadow-2xs">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground text-2xl shadow-2xs">
                 🌱
               </div>
               <div className="space-y-2">
-                <h2 className="text-xl sm:text-2xl font-display font-bold text-[#26302B]">
+                <h2 className="text-xl sm:text-2xl font-display font-bold text-foreground">
                   {language === 'vi' ? 'Xây dựng Life OS của bạn' : 'Build Your Personal Life OS'}
                 </h2>
-                <p className="text-sm text-[#788078] leading-relaxed">
+                <p className="text-sm text-muted-foreground leading-relaxed">
                   {language === 'vi'
                     ? 'Thiết lập một vài điều đầu tiên để Life OS có thể đồng hành cùng bạn trong học tập và cuộc sống.'
                     : 'Configure your first few foundations so Life OS can guide and support your daily study and life goals.'}
@@ -394,7 +394,7 @@ export default function AppHomePage() {
 
           {/* Get Started 4 Choices */}
           <div className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#788078]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {language === 'vi' ? 'Bạn có thể bắt đầu từ đây' : 'You Can Start From Here'}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -426,12 +426,12 @@ export default function AppHomePage() {
           </div>
 
           {/* Journey Section (3 Steps) */}
-          <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 sm:p-7 space-y-6 shadow-xs">
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-7 space-y-6 shadow-xs">
             <div className="space-y-1">
-              <h3 className="font-display font-bold text-base sm:text-lg text-[#26302B]">
+              <h3 className="font-display font-bold text-base sm:text-lg text-foreground">
                 {language === 'vi' ? 'Xây dựng không gian của bạn' : 'Build Your Space'}
               </h3>
-              <p className="text-xs text-[#788078]">
+              <p className="text-xs text-muted-foreground">
                 {language === 'vi'
                   ? '3 bước nền tảng để biến Life OS thành trợ lý cá nhân đắc lực'
                   : '3 core steps to activate your personal productivity center'}
@@ -465,16 +465,16 @@ export default function AppHomePage() {
           </div>
 
           {/* AI Helper Compact Card */}
-          <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+          <div className="rounded-2xl border border-border bg-card p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
             <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#DDE8DF] text-2xl text-[#24302B]">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-accent text-accent-foreground text-2xl">
                 🤖
               </div>
               <div className="space-y-0.5">
-                <h4 className="font-semibold text-sm sm:text-base text-[#26302B]">
+                <h4 className="font-semibold text-sm sm:text-base text-foreground">
                   {language === 'vi' ? 'Bạn cần trợ giúp?' : 'Need a study assistant?'}
                 </h4>
-                <p className="text-xs sm:text-sm text-[#788078]">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   {language === 'vi'
                     ? 'Hỏi AI về bài học, bài toán, essay hoặc project.'
                     : 'Ask AI about homework, complex math, essays, or study projects.'}
@@ -484,7 +484,7 @@ export default function AppHomePage() {
             <Link href="/app/ai" className="shrink-0">
               <Button
                 variant="outline"
-                className="border-[#E5E1D7] bg-white text-[#26302B] hover:bg-[#DDE8DF] hover:text-[#26302B] rounded-xl font-medium text-xs sm:text-sm px-4"
+                className="border-border bg-card text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl font-medium text-xs sm:text-sm px-4 transition-colors"
               >
                 {language === 'vi' ? 'Hỏi AI →' : 'Ask AI →'}
               </Button>
@@ -510,8 +510,8 @@ export default function AppHomePage() {
             </div>
             <div className="flex items-center gap-2">
               {profile?.verification_status === 'verified' && (
-                <Badge className="bg-[#DDE8DF] text-[#24302B] border-[#7D9B8A]/30 text-xs gap-1.5 py-1 px-3">
-                  <Sparkles className="h-3 w-3 text-[#7D9B8A]" />
+                <Badge className="bg-accent text-accent-foreground border-primary/30 text-xs gap-1.5 py-1 px-3">
+                  <Sparkles className="h-3 w-3 text-primary" />
                   {language === 'vi' ? 'Sinh viên đã xác thực' : 'Verified Student'}
                 </Badge>
               )}
@@ -519,13 +519,13 @@ export default function AppHomePage() {
           </div>
 
           {/* Primary Focus Card ("VIỆC QUAN TRỌNG NHẤT") */}
-          <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 sm:p-7 shadow-xs relative overflow-hidden">
+          <div className="rounded-2xl border border-border bg-card p-6 sm:p-7 shadow-xs relative overflow-hidden">
             <div className="flex items-center justify-between gap-2 mb-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7D9B8A] bg-[#DDE8DF]/50 px-2.5 py-1 rounded-md">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-primary bg-accent/60 px-2.5 py-1 rounded-md">
                 {language === 'vi' ? 'VIỆC QUAN TRỌNG NHẤT' : 'PRIMARY FOCUS'}
               </span>
               {primaryTask && (
-                <span className="text-xs text-[#788078] flex items-center gap-1">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <Clock className="h-3.5 w-3.5" />
                   {primaryTask.start_time} - {primaryTask.end_time} ({primaryTask.duration_minutes}m)
                 </span>
@@ -536,21 +536,21 @@ export default function AppHomePage() {
               <div className="space-y-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-[#7D9B8A] uppercase">
+                    <span className="text-xs font-semibold text-primary uppercase">
                       {primaryTask.subject || 'HỌC TẬP'}
                     </span>
                     {primaryTask.topic && (
                       <>
-                        <span className="text-xs text-[#788078]">•</span>
-                        <span className="text-xs text-[#788078]">{primaryTask.topic}</span>
+                        <span className="text-xs text-muted-foreground">•</span>
+                        <span className="text-xs text-muted-foreground">{primaryTask.topic}</span>
                       </>
                     )}
                   </div>
-                  <h2 className="text-xl sm:text-2xl font-bold text-[#26302B] mt-1">
+                  <h2 className="text-xl sm:text-2xl font-bold text-foreground mt-1">
                     {primaryTask.title}
                   </h2>
                   {primaryTask.description && (
-                    <p className="text-xs sm:text-sm text-[#788078] mt-1 line-clamp-2">
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-2">
                       {primaryTask.description}
                     </p>
                   )}
@@ -558,17 +558,17 @@ export default function AppHomePage() {
 
                 {/* Progress bar */}
                 <div className="space-y-1.5 pt-1">
-                  <div className="flex items-center justify-between text-xs text-[#788078]">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>
                       {primaryTask.status === 'completed'
                         ? language === 'vi' ? 'Đã hoàn thành' : 'Completed'
                         : language === 'vi' ? 'Đang chờ thực hiện' : 'In Progress'}
                     </span>
-                    <span className="font-semibold text-[#26302B]">
+                    <span className="font-semibold text-foreground">
                       {primaryTask.status === 'completed' ? '100%' : '80%'}
                     </span>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-[#E5E1D7] overflow-hidden">
+                  <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                     <div
                       className="h-full bg-[#7D9B8A] rounded-full transition-all duration-300"
                       style={{ width: primaryTask.status === 'completed' ? '100%' : '80%' }}
@@ -594,7 +594,7 @@ export default function AppHomePage() {
                   <Link href="/app/calendar">
                     <Button
                       variant="outline"
-                      className="border-[#E5E1D7] text-[#26302B] hover:bg-[#DDE8DF] rounded-xl text-sm"
+                      className="border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl text-sm transition-colors"
                     >
                       {language === 'vi' ? 'Chi tiết lịch' : 'Calendar view'}
                     </Button>
@@ -603,16 +603,16 @@ export default function AppHomePage() {
               </div>
             ) : (
               <div className="py-6 text-center space-y-3">
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#DDE8DF] text-[#7D9B8A]">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-primary">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-[#26302B]">
+                  <p className="text-sm font-semibold text-foreground">
                     {language === 'vi'
                       ? 'Bạn chưa có nhiệm vụ học tập hôm nay.'
                       : 'No study tasks scheduled for today.'}
                   </p>
-                  <p className="text-xs text-[#788078] max-w-sm mx-auto">
+                  <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                     {language === 'vi'
                       ? 'Tạo một nhiệm vụ để duy trì nhịp điệu học tập và tích lũy XP.'
                       : 'Schedule a task to stay consistent and level up your Life OS.'}
@@ -658,37 +658,37 @@ export default function AppHomePage() {
             {/* Left Column (7 cols) */}
             <div className="lg:col-span-7 space-y-6">
               {/* Today's Tasks ("VIỆC HÔM NAY") */}
-              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-4">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-display font-bold text-base text-[#26302B]">
+                    <h3 className="font-display font-bold text-base text-foreground">
                       {language === 'vi' ? 'VIỆC HÔM NAY' : "TODAY'S TASKS"}
                     </h3>
-                    <Badge className="bg-[#DDE8DF] text-[#26302B] text-[11px] font-semibold border-0">
+                    <Badge className="bg-accent text-accent-foreground text-[11px] font-semibold border-0">
                       {todayTasks.length}
                     </Badge>
                   </div>
                   <Link
                     href="/app/calendar"
-                    className="text-xs font-medium text-[#7D9B8A] hover:underline flex items-center gap-1"
+                    className="text-xs font-medium text-primary hover:text-primary/80 hover:underline flex items-center gap-1 transition-colors"
                   >
                     {language === 'vi' ? 'Xem lịch →' : 'Open calendar →'}
                   </Link>
                 </div>
 
                 {todayTasks.length === 0 ? (
-                  <div className="py-8 text-center space-y-2 border border-dashed border-[#E5E1D7] rounded-xl">
-                    <p className="text-sm font-medium text-[#26302B]">
+                  <div className="py-8 text-center space-y-2 border border-dashed border-border rounded-xl">
+                    <p className="text-sm font-medium text-foreground">
                       {language === 'vi' ? 'Chưa có nhiệm vụ hôm nay.' : 'No tasks scheduled today.'}
                     </p>
-                    <p className="text-xs text-[#788078]">
+                    <p className="text-xs text-muted-foreground">
                       {language === 'vi' ? 'Bắt đầu ngày mới với một kế hoạch rõ ràng.' : 'Plan your study sessions for today.'}
                     </p>
                     <Link href="/app/calendar">
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-[#E5E1D7] text-[#7D9B8A] hover:bg-[#DDE8DF] rounded-xl text-xs mt-2"
+                        className="border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl text-xs mt-2 transition-colors"
                       >
                         {language === 'vi' ? 'Tạo nhiệm vụ đầu tiên →' : 'Create first task →'}
                       </Button>
@@ -703,8 +703,8 @@ export default function AppHomePage() {
                           key={task.id}
                           className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
                             isDone
-                              ? 'bg-[#F4F1E8]/50 border-transparent text-[#788078]'
-                              : 'bg-white border-[#E5E1D7] hover:border-[#7D9B8A]/40 text-[#26302B]'
+                              ? 'bg-muted/40 border-transparent text-muted-foreground'
+                              : 'bg-card border-border hover:border-primary/40 text-card-foreground'
                           }`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
@@ -712,35 +712,35 @@ export default function AppHomePage() {
                               onClick={() => handleToggleTask(task)}
                               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
                                 isDone
-                                  ? 'bg-[#7D9B8A] border-[#7D9B8A] text-white'
-                                  : 'border-[#E5E1D7] hover:border-[#7D9B8A]'
+                                  ? 'bg-primary border-primary text-primary-foreground'
+                                  : 'border-border hover:border-primary'
                               }`}
                               aria-label="Toggle task status"
                             >
                               {isDone && <Check className="h-3.5 w-3.5 stroke-[3]" />}
                             </button>
 
-                            <span className="text-xs font-mono text-[#788078] shrink-0">
+                            <span className="text-xs font-mono text-muted-foreground shrink-0">
                               {task.start_time}
                             </span>
 
                             <Badge
                               variant="outline"
-                              className="text-[10px] px-1.5 py-0 border-[#E5E1D7] bg-[#DDE8DF]/40 text-[#26302B] shrink-0 uppercase"
+                              className="text-[10px] px-1.5 py-0 border-border bg-accent/40 text-accent-foreground shrink-0 uppercase"
                             >
                               {task.subject || 'Study'}
                             </Badge>
 
                             <span
                               className={`text-sm truncate font-medium ${
-                                isDone ? 'line-through text-[#788078]' : 'text-[#26302B]'
+                                isDone ? 'line-through text-muted-foreground' : 'text-foreground'
                               }`}
                             >
                               {task.title}
                             </span>
                           </div>
 
-                          <span className="text-[11px] text-[#788078] shrink-0 ml-2">
+                          <span className="text-[11px] text-muted-foreground shrink-0 ml-2">
                             {task.duration_minutes}m
                           </span>
                         </div>
@@ -751,20 +751,20 @@ export default function AppHomePage() {
               </div>
 
               {/* Study Progress Chart ("TIẾN ĐỘ HỌC") */}
-              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-4">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-display font-bold text-base text-[#26302B]">
+                    <h3 className="font-display font-bold text-base text-foreground">
                       {language === 'vi' ? 'TIẾN ĐỘ HỌC' : 'STUDY PROGRESS'}
                     </h3>
-                    <p className="text-xs text-[#788078]">
+                    <p className="text-xs text-muted-foreground">
                       {Math.floor(totalWeeklyMinutes / 60)}h {totalWeeklyMinutes % 60}m{' '}
                       {language === 'vi' ? 'tuần này' : 'this week'}
                     </p>
                   </div>
                   <Link
                     href="/app/study?tab=progress"
-                    className="text-xs font-medium text-[#7D9B8A] hover:underline"
+                    className="text-xs font-medium text-primary hover:text-primary/80 hover:underline transition-colors"
                   >
                     {language === 'vi' ? 'Chi tiết →' : 'Details →'}
                   </Link>
@@ -772,7 +772,7 @@ export default function AppHomePage() {
 
                 {/* 7-day Bar Chart */}
                 <div className="pt-4">
-                  <div className="grid grid-cols-7 gap-2 items-end h-32 border-b border-[#E5E1D7] pb-2">
+                  <div className="grid grid-cols-7 gap-2 items-end h-32 border-b border-border pb-2">
                     {dailyStudyMinutes.map((day, idx) => {
                       const heightPercent =
                         day.minutes > 0
@@ -780,14 +780,14 @@ export default function AppHomePage() {
                           : 4;
                       return (
                         <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
-                          <div className="text-[10px] text-[#788078] opacity-0 group-hover:opacity-100 transition-opacity font-mono">
+                          <div className="text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity font-mono">
                             {day.minutes > 0 ? `${day.minutes}m` : '0'}
                           </div>
                           <div
-                            className="w-full max-w-[28px] rounded-t-md transition-all duration-300 group-hover:brightness-95"
+                            className="w-full max-w-[28px] rounded-t-md transition-all duration-300 group-hover:brightness-95 bg-border dark:bg-muted"
                             style={{
                               height: `${heightPercent}%`,
-                              backgroundColor: day.minutes > 0 ? '#7D9B8A' : '#E5E1D7',
+                              backgroundColor: day.minutes > 0 ? '#7D9B8A' : undefined,
                             }}
                           />
                         </div>
@@ -797,7 +797,7 @@ export default function AppHomePage() {
                   {/* Day labels */}
                   <div className="grid grid-cols-7 gap-2 pt-2 text-center">
                     {dailyStudyMinutes.map((day, idx) => (
-                      <span key={idx} className="text-[11px] font-medium text-[#788078]">
+                      <span key={idx} className="text-[11px] font-medium text-muted-foreground">
                         {day.label}
                       </span>
                     ))}
@@ -809,14 +809,14 @@ export default function AppHomePage() {
             {/* Right Column (5 cols) */}
             <div className="lg:col-span-5 space-y-6">
               {/* Active Challenge Card */}
-              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-3.5">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-3.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7D9B8A]">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
                     {language === 'vi' ? 'THỬ THÁCH' : 'ACTIVE CHALLENGE'}
                   </span>
                   <Link
                     href="/app/study?tab=challenges"
-                    className="text-xs text-[#788078] hover:text-[#26302B]"
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {language === 'vi' ? 'Tất cả →' : 'All →'}
                   </Link>
@@ -829,10 +829,10 @@ export default function AppHomePage() {
                         {activeChallenge.challenge.icon || '🏆'}
                       </span>
                       <div className="min-w-0">
-                        <h4 className="font-semibold text-sm text-[#26302B] truncate">
+                        <h4 className="font-semibold text-sm text-foreground truncate">
                           {activeChallenge.challenge.title}
                         </h4>
-                        <p className="text-xs text-[#788078]">
+                        <p className="text-xs text-muted-foreground">
                           {language === 'vi' ? 'Ngày' : 'Day'}{' '}
                           {Math.min(
                             activeChallenge.streak + 1,
@@ -844,13 +844,13 @@ export default function AppHomePage() {
                     </div>
 
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between text-xs text-[#788078]">
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{activeChallenge.progress || 0}%</span>
-                        <span className="text-[#26302B] font-medium">
+                        <span className="text-foreground font-medium">
                           🔥 {activeChallenge.streak || 0} {language === 'vi' ? 'ngày streak' : 'd streak'}
                         </span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-[#E5E1D7] overflow-hidden">
+                      <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
                         <div
                           className="h-full bg-[#7D9B8A] rounded-full transition-all"
                           style={{ width: `${activeChallenge.progress || 0}%` }}
@@ -862,7 +862,7 @@ export default function AppHomePage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full border-[#E5E1D7] text-[#26302B] hover:bg-[#DDE8DF] rounded-xl text-xs mt-1"
+                        className="w-full border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl text-xs mt-1 transition-colors"
                       >
                         {language === 'vi' ? 'Xem thử thách →' : 'View challenge →'}
                       </Button>
@@ -870,7 +870,7 @@ export default function AppHomePage() {
                   </div>
                 ) : (
                   <div className="py-4 text-center space-y-2">
-                    <p className="text-xs text-[#788078]">
+                    <p className="text-xs text-muted-foreground">
                       {language === 'vi'
                         ? 'Bạn chưa tham gia thử thách nào.'
                         : 'No active challenges joined yet.'}
@@ -879,7 +879,7 @@ export default function AppHomePage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-[#E5E1D7] text-[#7D9B8A] hover:bg-[#DDE8DF] rounded-xl text-xs"
+                        className="border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl text-xs transition-colors"
                       >
                         {language === 'vi' ? 'Khám phá thử thách →' : 'Explore challenges →'}
                       </Button>
@@ -889,19 +889,19 @@ export default function AppHomePage() {
               </div>
 
               {/* AI Study Card */}
-              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-5 shadow-xs space-y-2.5">
+              <div className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-2.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#DDE8DF] text-base text-[#24302B]">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-base text-accent-foreground">
                     🤖
                   </div>
                   <div>
-                    <h4 className="font-semibold text-xs text-[#26302B]">AI Study</h4>
-                    <p className="text-[11px] text-[#788078]">
+                    <h4 className="font-semibold text-xs text-foreground">AI Study</h4>
+                    <p className="text-[11px] text-muted-foreground">
                       {language === 'vi' ? 'Cần trợ giúp học tập?' : 'Need study help?'}
                     </p>
                   </div>
                 </div>
-                <p className="text-xs text-[#788078] leading-relaxed">
+                <p className="text-xs text-muted-foreground leading-relaxed">
                   {language === 'vi'
                     ? 'Hỏi AI về bài học, bài toán, essay hoặc project.'
                     : 'Ask questions about complex lessons, math solutions, or essay feedback.'}
@@ -917,12 +917,15 @@ export default function AppHomePage() {
               </div>
 
               {/* My Life Preview ("CUỘC SỐNG") */}
-              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-3.5">
+              <div className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-3.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7D9B8A]">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-primary">
                     {language === 'vi' ? 'CUỘC SỐNG' : 'MY LIFE'}
                   </span>
-                  <Link href="/app/my-life" className="text-xs text-[#788078] hover:text-[#26302B]">
+                  <Link
+                    href="/app/my-life"
+                    className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  >
                     {language === 'vi' ? 'Mở My Life →' : 'Open →'}
                   </Link>
                 </div>
@@ -931,12 +934,12 @@ export default function AppHomePage() {
                   {/* Journal */}
                   <Link
                     href="/app/my-life"
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-[#E5E1D7] hover:bg-[#DDE8DF]/30 transition-colors"
+                    className="group flex items-center justify-between p-2.5 rounded-xl border border-border bg-card hover:bg-accent/40 transition-colors"
                   >
-                    <span className="flex items-center gap-2 text-[#26302B] font-medium">
+                    <span className="flex items-center gap-2 text-foreground font-medium">
                       🌿 {language === 'vi' ? 'Nhật ký' : 'Journal'}
                     </span>
-                    <span className="text-[#788078] flex items-center gap-1">
+                    <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors flex items-center gap-1">
                       {hasJournalToday
                         ? language === 'vi' ? 'Đã viết hôm nay ✓' : 'Written today ✓'
                         : language === 'vi' ? 'Viết nhật ký hôm nay →' : 'Write today →'}
@@ -946,12 +949,12 @@ export default function AppHomePage() {
                   {/* Habits */}
                   <Link
                     href="/app/my-life"
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-[#E5E1D7] hover:bg-[#DDE8DF]/30 transition-colors"
+                    className="group flex items-center justify-between p-2.5 rounded-xl border border-border bg-card hover:bg-accent/40 transition-colors"
                   >
-                    <span className="flex items-center gap-2 text-[#26302B] font-medium">
+                    <span className="flex items-center gap-2 text-foreground font-medium">
                       ✓ {language === 'vi' ? 'Thói quen' : 'Habits'}
                     </span>
-                    <span className="text-[#788078]">
+                    <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">
                       {todayHabitLogs.length} / {habits.length}{' '}
                       {language === 'vi' ? 'hoàn thành →' : 'completed →'}
                     </span>
@@ -960,12 +963,12 @@ export default function AppHomePage() {
                   {/* Mood */}
                   <Link
                     href="/app/my-life"
-                    className="flex items-center justify-between p-2.5 rounded-xl border border-[#E5E1D7] hover:bg-[#DDE8DF]/30 transition-colors"
+                    className="group flex items-center justify-between p-2.5 rounded-xl border border-border bg-card hover:bg-accent/40 transition-colors"
                   >
-                    <span className="flex items-center gap-2 text-[#26302B] font-medium">
+                    <span className="flex items-center gap-2 text-foreground font-medium">
                       ☁ {language === 'vi' ? 'Tâm trạng' : 'Mood'}
                     </span>
-                    <span className="text-[#788078]">
+                    <span className="text-xs text-muted-foreground group-hover:text-primary transition-colors">
                       {latestMood
                         ? `${latestMood.mood}/5`
                         : language === 'vi'
@@ -977,12 +980,12 @@ export default function AppHomePage() {
               </div>
 
               {/* Community CTA */}
-              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-5 flex items-center justify-between shadow-xs">
+              <div className="rounded-2xl border border-border bg-card p-5 flex items-center justify-between shadow-xs">
                 <div className="space-y-0.5">
-                  <h4 className="font-semibold text-xs text-[#26302B]">
+                  <h4 className="font-semibold text-xs text-foreground">
                     {language === 'vi' ? 'Cộng đồng học sinh' : 'Student Community'}
                   </h4>
-                  <p className="text-[11px] text-[#788078]">
+                  <p className="text-[11px] text-muted-foreground">
                     {language === 'vi' ? 'Chia sẻ tài liệu & tìm bạn cùng học' : 'Share study decks & find study buddies'}
                   </p>
                 </div>
@@ -990,7 +993,7 @@ export default function AppHomePage() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="border-[#E5E1D7] text-[#26302B] hover:bg-[#DDE8DF] rounded-xl text-xs shrink-0"
+                    className="border-border text-foreground hover:bg-accent hover:text-accent-foreground rounded-xl text-xs shrink-0 transition-colors"
                   >
                     {language === 'vi' ? 'Khám phá →' : 'Explore →'}
                   </Button>
@@ -1016,14 +1019,14 @@ function StatCard({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-5 flex items-center gap-4 shadow-xs">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#DDE8DF] text-[#7D9B8A]">
+    <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-4 shadow-xs">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
         <Icon className="h-5 w-5" />
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-[#788078] font-medium">{label}</p>
-        <p className="text-lg font-bold text-[#26302B] tracking-tight">{value}</p>
-        <p className="text-[11px] text-[#788078] truncate">{sub}</p>
+        <p className="text-xs text-muted-foreground font-medium">{label}</p>
+        <p className="text-lg font-bold text-foreground tracking-tight">{value}</p>
+        <p className="text-[11px] text-muted-foreground truncate">{sub}</p>
       </div>
     </div>
   );
@@ -1042,15 +1045,15 @@ function QuickStartCard({
 }) {
   return (
     <Link href={href} className="block group">
-      <div className="rounded-xl border border-[#E5E1D7] bg-[#FFFFFF] p-4 flex items-center gap-3.5 hover:border-[#7D9B8A]/40 hover:bg-[#DDE8DF]/20 transition-all shadow-2xs cursor-pointer">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DDE8DF]/70 text-[#24302B] group-hover:bg-[#7D9B8A] group-hover:text-white transition-colors">
+      <div className="rounded-xl border border-border bg-card p-4 flex items-center gap-3.5 hover:border-primary/40 hover:bg-accent/30 transition-all shadow-2xs cursor-pointer">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
           <Icon className="h-4.5 w-4.5" />
         </div>
         <div className="min-w-0">
-          <h4 className="text-[11px] font-bold text-[#7D9B8A] tracking-wider uppercase">
+          <h4 className="text-[11px] font-bold text-primary tracking-wider uppercase">
             {title}
           </h4>
-          <p className="text-xs font-medium text-[#26302B] group-hover:text-[#24302B] truncate">
+          <p className="text-xs font-medium text-foreground group-hover:text-primary transition-colors truncate">
             {subtitle}
           </p>
         </div>
@@ -1077,28 +1080,28 @@ function JourneyStep({
       <div
         className={`p-4 rounded-xl border transition-all ${
           completed
-            ? 'border-[#7D9B8A]/40 bg-[#DDE8DF]/20'
-            : 'border-[#E5E1D7] bg-[#FFFFFF] hover:border-[#7D9B8A]/30'
+            ? 'border-primary/40 bg-accent/30'
+            : 'border-border bg-card hover:border-primary/40 hover:bg-accent/20'
         }`}
       >
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[11px] font-mono font-bold text-[#7D9B8A]">
+          <span className="text-[11px] font-mono font-bold text-primary">
             {stepNumber}
           </span>
           <div
             className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
               completed
-                ? 'bg-[#7D9B8A] text-white'
-                : 'border border-[#E5E1D7] text-[#788078]'
+                ? 'bg-primary text-primary-foreground'
+                : 'border border-border text-muted-foreground'
             }`}
           >
             {completed ? '✓' : '○'}
           </div>
         </div>
-        <h4 className="text-xs font-bold text-[#26302B] group-hover:text-[#7D9B8A] transition-colors">
+        <h4 className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
           {title}
         </h4>
-        <p className="text-[11px] text-[#788078] mt-0.5">{description}</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">{description}</p>
       </div>
     </Link>
   );
