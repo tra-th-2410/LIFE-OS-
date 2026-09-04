@@ -1,322 +1,1105 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useLanguage } from '@/components/language-provider';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, Target, Trophy, Bot, BookOpen, TrendingUp, ArrowRight, Sparkles, Heart, Flame } from 'lucide-react';
-import { formatRelativeTime } from '@/lib/helpers';
-import { useLanguage } from '@/components/language-provider';
-import type { Community, Challenge, ChallengeParticipant, Project } from '@/lib/types';
+import {
+  Sparkles,
+  ArrowRight,
+  BookOpen,
+  Target,
+  Bot,
+  Heart,
+  Trophy,
+  Flame,
+  Check,
+  Calendar,
+  Clock,
+  TrendingUp,
+  Smile,
+  Award,
+  ChevronRight,
+  Plus,
+  Compass,
+  CheckCircle2,
+  Users,
+} from 'lucide-react';
+import { getDisplayName } from '@/lib/helpers';
+import { getCalendarEvents, updateEventStatus } from '@/lib/calendar';
+import type {
+  SmartCalendarEvent,
+  CalendarEventStatus,
+  UserGamification,
+  ChallengeParticipant,
+  Challenge,
+  Habit,
+  HabitLog,
+  MoodEntry,
+  StudySession,
+} from '@/lib/types';
+import { toast } from 'sonner';
+
+function getTodayString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getPast7DaysArray(): { dateStr: string; label: string; shortDay: string }[] {
+  const result: { dateStr: string; label: string; shortDay: string }[] = [];
+  const dayNamesVi = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+  const dayNamesEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    result.push({
+      dateStr,
+      label: dayNamesVi[d.getDay()],
+      shortDay: dayNamesEn[d.getDay()],
+    });
+  }
+  return result;
+}
 
 export default function AppHomePage() {
   const { user, profile } = useAuth();
-  const { t } = useLanguage();
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [activeChallenges, setActiveChallenges] = useState<(ChallengeParticipant & { challenge?: Challenge })[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { language } = useLanguage();
+
   const [loading, setLoading] = useState(true);
+  const [gamification, setGamification] = useState<UserGamification | null>(null);
+  const [todayTasks, setTodayTasks] = useState<SmartCalendarEvent[]>([]);
+  const [sevenDaysSessions, setSevenDaysSessions] = useState<StudySession[]>([]);
+  const [activeChallenge, setActiveChallenge] = useState<(ChallengeParticipant & { challenge?: Challenge }) | null>(null);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [todayHabitLogs, setTodayHabitLogs] = useState<HabitLog[]>([]);
+  const [latestMood, setLatestMood] = useState<MoodEntry | null>(null);
+  const [hasJournalToday, setHasJournalToday] = useState(false);
+  const [goalsCount, setGoalsCount] = useState(0);
+  const [lifetimeActivitiesCount, setLifetimeActivitiesCount] = useState(0);
+
+  const todayStr = useMemo(() => getTodayString(), []);
+  const past7Days = useMemo(() => getPast7DaysArray(), []);
+
+  const loadData = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+
+    try {
+      const startDate7DaysAgo = past7Days[0]?.dateStr ?? todayStr;
+
+      const [
+        gameRes,
+        tasksRes,
+        sessRes,
+        chRes,
+        habitsRes,
+        hLogsRes,
+        moodRes,
+        journalRes,
+        allTasksCountRes,
+        allSessionsCountRes,
+        allChallengesCountRes,
+        allHabitsCountRes,
+        allJournalsCountRes,
+        allMoodsCountRes,
+        goalsRes,
+      ] = await Promise.all([
+        // 1. Gamification
+        supabase.from('user_gamification').select('*').eq('user_id', user.id).maybeSingle(),
+
+        // 2. Today's smart calendar tasks
+        getCalendarEvents(user.id, todayStr, todayStr),
+
+        // 3. Study sessions for the last 7 days
+        supabase
+          .from('study_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .gte('started_at', `${startDate7DaysAgo}T00:00:00Z`),
+
+        // 4. Active challenge
+        supabase
+          .from('challenge_participants')
+          .select('*, challenge:challenges(*)')
+          .eq('user_id', user.id)
+          .eq('completed', false)
+          .order('joined_at', { ascending: false })
+          .limit(1),
+
+        // 5. Habits
+        supabase.from('habits').select('*').eq('user_id', user.id).is('archived_at', null),
+
+        // 6. Today habit logs
+        supabase.from('habit_logs').select('*').eq('user_id', user.id).eq('completed_date', todayStr),
+
+        // 7. Latest mood entry
+        supabase.from('mood_entries').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(1),
+
+        // 8. Journal today
+        supabase
+          .from('journal_entries')
+          .select('id, created_at')
+          .eq('user_id', user.id)
+          .gte('created_at', `${todayStr}T00:00:00Z`)
+          .limit(1),
+
+        // 9. All lifetime tasks
+        supabase.from('smart_calendar_events').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+
+        // 10. All lifetime study sessions
+        supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+
+        // 11. All lifetime challenge participants
+        supabase.from('challenge_participants').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+
+        // 12. All lifetime habits
+        supabase.from('habits').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+
+        // 13. All lifetime journal entries
+        supabase.from('journal_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+
+        // 14. All lifetime mood entries
+        supabase.from('mood_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+
+        // 15. Goals count
+        supabase.from('goals').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      ]);
+
+      setGamification((gameRes.data as UserGamification) ?? null);
+      setTodayTasks(tasksRes ?? []);
+      setSevenDaysSessions((sessRes.data as StudySession[]) ?? []);
+
+      const chData = (chRes.data as (ChallengeParticipant & { challenge?: Challenge })[]) ?? [];
+      setActiveChallenge(chData[0]?.challenge ? chData[0] : null);
+
+      setHabits((habitsRes.data as Habit[]) ?? []);
+      setTodayHabitLogs((hLogsRes.data as HabitLog[]) ?? []);
+      setLatestMood(((moodRes.data as MoodEntry[]) ?? [])[0] ?? null);
+      setHasJournalToday((journalRes.data?.length ?? 0) > 0);
+      setGoalsCount(goalsRes.count ?? 0);
+
+      const totalActivities =
+        (allTasksCountRes.count ?? 0) +
+        (allSessionsCountRes.count ?? 0) +
+        (allChallengesCountRes.count ?? 0) +
+        (allHabitsCountRes.count ?? 0) +
+        (allJournalsCountRes.count ?? 0) +
+        (allMoodsCountRes.count ?? 0) +
+        (goalsRes.count ?? 0);
+
+      setLifetimeActivitiesCount(totalActivities);
+    } catch (err) {
+      console.error('Error loading Life OS Home data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, todayStr, past7Days]);
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('communities').select('*').is('archived_at', null).order('members_count', { ascending: false }).limit(6),
-      user
-        ? supabase
-            .from('challenge_participants')
-            .select('*, challenge:challenges(*)')
-            .eq('user_id', user.id)
-            .eq('completed', false)
-            .order('joined_at', { ascending: false })
-            .limit(4)
-        : Promise.resolve({ data: [] }),
-      supabase.from('projects').select('*').eq('status', 'recruiting').limit(4),
-    ]).then(([cRes, chRes, pRes]) => {
-      setCommunities((cRes.data as Community[]) ?? []);
-      const rawParts = (chRes.data as (ChallengeParticipant & { challenge?: Challenge })[]) ?? [];
-      const validParts = rawParts.filter((p) => p.challenge && p.challenge.status !== 'archived');
-      setActiveChallenges(validParts);
-      setProjects((pRes.data as Project[]) ?? []);
-      setLoading(false);
+    loadData();
+  }, [loadData]);
+
+  // Purely automatic detection of New User vs Active/Returning User
+  const isNewUser = useMemo(() => {
+    const xp = gamification?.xp ?? 0;
+    const streak = gamification?.streak_days ?? 0;
+
+    // Meaningful activity check from database
+    const hasMeaningfulActivity = xp > 0 || streak > 0 || lifetimeActivitiesCount > 0;
+
+    // Profile completeness check
+    const hasProfileName = Boolean(profile?.full_name?.trim() || profile?.display_name?.trim());
+    const hasPersonalization = Boolean(
+      profile?.bio?.trim() ||
+      (profile?.interests && profile.interests.length > 0) ||
+      (profile?.skills && profile.skills.length > 0) ||
+      (profile?.goals && profile.goals.length > 0)
+    );
+    const isProfileSetupComplete = hasProfileName && hasPersonalization;
+
+    // Case 1: If user has no meaningful activity at all in the database, they are a NEW USER
+    if (!hasMeaningfulActivity) {
+      return true;
+    }
+
+    // If profile is incomplete and activity is completely 0, they are a NEW USER
+    if (!isProfileSetupComplete && lifetimeActivitiesCount === 0 && xp === 0) {
+      return true;
+    }
+
+    // Case 2 & 3: User has meaningful activity (tasks, study sessions, challenges, habits, journals, etc.) -> ACTIVE USER
+    return false;
+  }, [gamification, lifetimeActivitiesCount, profile]);
+
+  // Toggle task status
+  const handleToggleTask = async (task: SmartCalendarEvent) => {
+    const nextStatus: CalendarEventStatus = task.status === 'completed' ? 'todo' : 'completed';
+    setTodayTasks((prev) =>
+      prev.map((t) => (t.id === task.id ? { ...t, status: nextStatus } : t))
+    );
+
+    try {
+      await updateEventStatus(task.id, nextStatus);
+      if (nextStatus === 'completed') {
+        toast.success(language === 'vi' ? 'Đã hoàn thành nhiệm vụ! 🎉' : 'Task completed! 🎉');
+      }
+    } catch (err) {
+      console.error('Failed to update task status:', err);
+      toast.error('Không thể cập nhật trạng thái');
+      // Revert
+      setTodayTasks((prev) =>
+        prev.map((t) => (t.id === task.id ? { ...t, status: task.status } : t))
+      );
+    }
+  };
+
+  // 7-day study minutes aggregation
+  const dailyStudyMinutes = useMemo(() => {
+    const map: Record<string, number> = {};
+    past7Days.forEach((p) => {
+      map[p.dateStr] = 0;
     });
-  }, [user]);
+
+    sevenDaysSessions.forEach((s) => {
+      const sDate = s.started_at ? s.started_at.split('T')[0] : '';
+      if (map[sDate] !== undefined) {
+        map[sDate] += Math.round((s.duration_seconds || 0) / 60);
+      }
+    });
+
+    // Also include today's completed tasks duration
+    todayTasks.forEach((t) => {
+      if (t.status === 'completed' && map[t.date] !== undefined) {
+        map[t.date] += t.duration_minutes || 0;
+      }
+    });
+
+    return past7Days.map((p) => ({
+      dateStr: p.dateStr,
+      label: language === 'vi' ? p.label : p.shortDay,
+      minutes: map[p.dateStr] ?? 0,
+    }));
+  }, [past7Days, sevenDaysSessions, todayTasks, language]);
+
+  const totalWeeklyMinutes = useMemo(() => {
+    return dailyStudyMinutes.reduce((acc, curr) => acc + curr.minutes, 0);
+  }, [dailyStudyMinutes]);
+
+  const maxDailyMinute = useMemo(() => {
+    const maxVal = Math.max(...dailyStudyMinutes.map((d) => d.minutes));
+    return maxVal > 0 ? maxVal : 60;
+  }, [dailyStudyMinutes]);
+
+  // Primary focus task for active user
+  const primaryTask = useMemo(() => {
+    const uncompleted = todayTasks.find((t) => t.status !== 'completed');
+    return uncompleted ?? todayTasks[0] ?? null;
+  }, [todayTasks]);
+
+  const completedTasksCount = useMemo(() => {
+    return todayTasks.filter((t) => t.status === 'completed').length;
+  }, [todayTasks]);
+
+  // Greeting based on current time
+  const currentHour = new Date().getHours();
+  const greetingText = useMemo(() => {
+    const name = getDisplayName(profile);
+    if (language === 'vi') {
+      if (currentHour >= 5 && currentHour < 12) return `Chào buổi sáng, ${name} 👋`;
+      if (currentHour >= 12 && currentHour < 18) return `Chào buổi chiều, ${name} 👋`;
+      return `Chào buổi tối, ${name} 👋`;
+    } else {
+      if (currentHour >= 5 && currentHour < 12) return `Good morning, ${name} 👋`;
+      if (currentHour >= 12 && currentHour < 18) return `Good afternoon, ${name} 👋`;
+      return `Good evening, ${name} 👋`;
+    }
+  }, [currentHour, profile, language]);
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-48 rounded-2xl animate-shimmer" />
-        ))}
+      <div className="max-w-5xl mx-auto space-y-6">
+        <div className="h-12 w-1/3 rounded-2xl bg-[#E5E1D7]/50 animate-pulse" />
+        <div className="h-44 w-full rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="h-28 rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
+          <div className="h-28 rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
+          <div className="h-28 rounded-2xl bg-[#FFFFFF] border border-[#E5E1D7] animate-pulse" />
+        </div>
       </div>
     );
   }
 
-  const hour = new Date().getHours();
-  const greeting = t(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
-
   return (
-    <div className="space-y-8 max-w-6xl mx-auto">
-      {/* Welcome */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-display font-bold">
-            {greeting}, {profile?.username ?? t('there')}!
-          </h1>
-          <p className="text-muted-foreground mt-1">Here&apos;s what&apos;s happening in your world today.</p>
-        </div>
-        {profile && (
-          <div className="flex items-center gap-2">
-            {profile.verification_status === 'verified' && (
-              <Badge className="gap-1 bg-success/10 text-success border-success/20">
-                <Sparkles className="h-3 w-3" /> Verified Student
-              </Badge>
-            )}
-            {profile.verification_status === 'pending' && (
-              <Badge className="gap-1 bg-warning/10 text-warning border-warning/20">
-                Verification Pending
-              </Badge>
-            )}
-            {profile.verification_status === 'basic' && (
-              <Link href="/app/settings">
-                <Badge variant="outline" className="gap-1 cursor-pointer hover:bg-muted">
-                  Basic Account
-                </Badge>
-              </Link>
-            )}
+    <div className="max-w-5xl mx-auto space-y-8 pb-16">
+      {isNewUser ? (
+        /* ========================================================================= */
+        /*                             NEW USER HOME                                 */
+        /* ========================================================================= */
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Header */}
+          <div className="space-y-1.5">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#26302B]">
+              {language === 'vi'
+                ? 'Chào mừng bạn đến với Life OS 👋'
+                : 'Welcome to Life OS 👋'}
+            </h1>
+            <p className="text-sm sm:text-base text-[#788078] max-w-2xl">
+              {language === 'vi'
+                ? 'Đây là không gian để bạn học tập, xây dựng thói quen và quản lý cuộc sống theo cách của riêng mình.'
+                : 'Your dedicated space to learn, build sustainable habits, and manage your life with clarity.'}
+            </p>
           </div>
-        )}
-      </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={BookOpen} label={t('Study')} value={t('0 goals')} href="/app/study" color="text-blue-500" bg="bg-blue-500/10" />
-        <StatCard icon={Users} label={t('Communities')} value={`${communities.length} ${t('joined')}`} href="/app/community" color="text-teal-500" bg="bg-teal-500/10" />
-        <StatCard icon={Target} label={t('Projects')} value={`${projects.length} ${t('active')}`} href="/app/projects" color="text-green-500" bg="bg-green-500/10" />
-        <StatCard icon={Trophy} label={t('Streak')} value={t('0 days')} href="/app/my-life" color="text-amber-500" bg="bg-amber-500/10" />
-      </div>
+          {/* Hero Panel */}
+          <div className="relative overflow-hidden rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-7 sm:p-10 shadow-xs">
+            {/* Subtle organic sage decorative shape */}
+            <div className="absolute right-0 top-0 -mt-12 -mr-12 h-64 w-64 rounded-full bg-[#DDE8DF]/40 blur-2xl pointer-events-none" />
+            <div className="absolute right-24 bottom-0 -mb-8 h-40 w-40 rounded-full bg-[#7D9B8A]/10 blur-xl pointer-events-none" />
 
-      {/* AI Assistant quick access */}
-      <Card className="border-border/60 overflow-hidden">
-        <CardContent className="p-0">
-          <div className="flex flex-col md:flex-row items-stretch">
-            <div className="flex-1 p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-xl">🌟</div>
-                <div>
-                  <h3 className="font-semibold">AI Assistant</h3>
-                  <p className="text-sm text-muted-foreground">Your personal growth companions</p>
-                </div>
+            <div className="relative z-10 max-w-xl space-y-4">
+              <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#DDE8DF] text-[#24302B] text-2xl shadow-2xs">
+                🌱
               </div>
-              <p className="text-sm text-muted-foreground mt-3">
-                Get help with homework, set goals, write in your private journal, or just chat. All AI assistants are transparent and safe.
-              </p>
-              <Link href="/app/ai">
-                <Button className="mt-4 gap-1.5" size="sm">
-                  Open AI Center <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </div>
-            <div className="grid grid-cols-2 gap-2 p-4 md:w-64 md:border-l border-border/60">
-              {[
-                { icon: '📚', name: 'Study Buddy', bot: 'study' },
-                { icon: '🎯', name: 'Life Coach', bot: 'life_coach' },
-                { icon: '📔', name: 'Journal', bot: 'journal' },
-                { icon: '🌟', name: 'Companion', bot: 'companion' },
-              ].map((b) => (
-                <Link key={b.bot} href={`/app/ai/${b.bot}`}>
-                  <div className="flex flex-col items-center gap-1 rounded-lg p-3 hover:bg-muted transition-colors cursor-pointer">
-                    <span className="text-2xl">{b.icon}</span>
-                    <span className="text-xs font-medium">{b.name}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Featured Communities */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-display font-bold">Featured Communities</h2>
-          <Link href="/app/community">
-            <Button variant="ghost" size="sm" className="gap-1">View all <ArrowRight className="h-3.5 w-3.5" /></Button>
-          </Link>
-        </div>
-        {communities.length === 0 ? (
-          <EmptyState icon={Users} text="No communities yet" />
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {communities.map((c) => (
-              <Link key={c.id} href={`/app/community/${c.slug}`}>
-                <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 h-full">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-2xl">{c.icon}</span>
-                      <Badge variant="outline" className="text-xs">{c.members_count.toLocaleString()}</Badge>
-                    </div>
-                    <h3 className="font-semibold text-sm group-hover:text-primary transition-colors">{c.name}</h3>
-                    <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{c.description}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Active Challenges */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-display font-bold">Active Challenges</h2>
-            {activeChallenges.length > 0 && (
-              <Badge variant="secondary" className="text-xs">
-                {activeChallenges.length} {t('active')}
-              </Badge>
-            )}
-          </div>
-          <Link href="/app/study">
-            <Button variant="ghost" size="sm" className="gap-1">View all <ArrowRight className="h-3.5 w-3.5" /></Button>
-          </Link>
-        </div>
-        {activeChallenges.length === 0 ? (
-          <Card className="border-dashed border-border/70 bg-card/50">
-            <CardContent className="flex flex-col items-center justify-center py-10 text-center space-y-3">
-              <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                <Trophy className="h-6 w-6" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">Bạn chưa tham gia thử thách nào</p>
-                <p className="text-xs text-muted-foreground max-w-sm">
-                  Rèn luyện thói quen học tập, nâng cao streak và duy trì mục tiêu mỗi ngày!
+              <div className="space-y-2">
+                <h2 className="text-xl sm:text-2xl font-display font-bold text-[#26302B]">
+                  {language === 'vi' ? 'Xây dựng Life OS của bạn' : 'Build Your Personal Life OS'}
+                </h2>
+                <p className="text-sm text-[#788078] leading-relaxed">
+                  {language === 'vi'
+                    ? 'Thiết lập một vài điều đầu tiên để Life OS có thể đồng hành cùng bạn trong học tập và cuộc sống.'
+                    : 'Configure your first few foundations so Life OS can guide and support your daily study and life goals.'}
                 </p>
               </div>
-              <Link href="/app/study">
-                <Button size="sm" className="rounded-xl gap-1.5 mt-1 font-medium">
-                  Khám phá thử thách <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {activeChallenges.map((part) => {
-              const ch = part.challenge;
-              if (!ch) return null;
-              return (
-                <Link key={part.challenge_id} href="/app/study">
-                  <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 h-full">
-                    <CardContent className="p-4 space-y-2.5">
-                      <div className="flex items-start justify-between">
-                        <span className="text-2xl">{ch.icon || '🎯'}</span>
-                        <Badge variant="outline" className="text-[11px] gap-1 font-medium">
-                          <Trophy className="h-3 w-3 text-amber-500" />
-                          {ch.duration_days}d
-                        </Badge>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm group-hover:text-primary transition-colors line-clamp-1">
-                          {ch.title}
-                        </h3>
-                        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-                          {ch.description || 'Thử thách rèn luyện hàng ngày'}
-                        </p>
-                      </div>
-                      <div className="pt-2 border-t border-border/40 space-y-1.5 text-xs">
-                        <div className="flex items-center justify-between text-muted-foreground">
-                          <span className="flex items-center gap-1 font-medium">
-                            <Flame className={`h-3.5 w-3.5 ${part.streak > 0 ? 'text-amber-500 fill-amber-500' : ''}`} />
-                            Streak: {part.streak || 0} ngày
+              <div className="pt-2">
+                <Link href="/app/calendar">
+                  <Button className="bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white px-6 py-2.5 rounded-xl font-medium shadow-xs gap-2">
+                    {language === 'vi' ? 'Bắt đầu →' : 'Get Started →'}
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Get Started 4 Choices */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#788078]">
+              {language === 'vi' ? 'Bạn có thể bắt đầu từ đây' : 'You Can Start From Here'}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <QuickStartCard
+                icon={BookOpen}
+                title={language === 'vi' ? 'HỌC TẬP' : 'STUDY'}
+                subtitle={language === 'vi' ? 'Tạo nhiệm vụ đầu tiên' : 'Create first task'}
+                href="/app/calendar"
+              />
+              <QuickStartCard
+                icon={Target}
+                title={language === 'vi' ? 'MỤC TIÊU' : 'GOALS'}
+                subtitle={language === 'vi' ? 'Đặt mục tiêu cho bản thân' : 'Set a personal goal'}
+                href="/app/my-life"
+              />
+              <QuickStartCard
+                icon={Bot}
+                title={language === 'vi' ? 'AI STUDY' : 'AI STUDY'}
+                subtitle={language === 'vi' ? 'Hỏi AI một câu hỏi' : 'Ask AI a question'}
+                href="/app/ai"
+              />
+              <QuickStartCard
+                icon={Heart}
+                title={language === 'vi' ? 'CUỘC SỐNG' : 'MY LIFE'}
+                subtitle={language === 'vi' ? 'Thiết lập thói quen' : 'Build a daily habit'}
+                href="/app/my-life"
+              />
+            </div>
+          </div>
+
+          {/* Journey Section (3 Steps) */}
+          <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 sm:p-7 space-y-6 shadow-xs">
+            <div className="space-y-1">
+              <h3 className="font-display font-bold text-base sm:text-lg text-[#26302B]">
+                {language === 'vi' ? 'Xây dựng không gian của bạn' : 'Build Your Space'}
+              </h3>
+              <p className="text-xs text-[#788078]">
+                {language === 'vi'
+                  ? '3 bước nền tảng để biến Life OS thành trợ lý cá nhân đắc lực'
+                  : '3 core steps to activate your personal productivity center'}
+              </p>
+            </div>
+
+            {/* Step Progress Line */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+              <JourneyStep
+                stepNumber="01"
+                title={language === 'vi' ? 'Thiết lập mục tiêu' : 'Set your goals'}
+                description={language === 'vi' ? 'Xác định kỳ vọng học tập' : 'Define your study targets'}
+                completed={goalsCount > 0}
+                href="/app/my-life"
+              />
+              <JourneyStep
+                stepNumber="02"
+                title={language === 'vi' ? 'Tạo nhiệm vụ đầu tiên' : 'Create first task'}
+                description={language === 'vi' ? 'Lên lịch buổi học hôm nay' : 'Schedule today’s sessions'}
+                completed={todayTasks.length > 0}
+                href="/app/calendar"
+              />
+              <JourneyStep
+                stepNumber="03"
+                title={language === 'vi' ? 'Bắt đầu học' : 'Start learning'}
+                description={language === 'vi' ? 'Hoàn thành bài tập & nhận XP' : 'Complete work & earn XP'}
+                completed={(gamification?.xp ?? 0) > 0 || sevenDaysSessions.length > 0}
+                href="/app/study"
+              />
+            </div>
+          </div>
+
+          {/* AI Helper Compact Card */}
+          <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#DDE8DF] text-2xl text-[#24302B]">
+                🤖
+              </div>
+              <div className="space-y-0.5">
+                <h4 className="font-semibold text-sm sm:text-base text-[#26302B]">
+                  {language === 'vi' ? 'Bạn cần trợ giúp?' : 'Need a study assistant?'}
+                </h4>
+                <p className="text-xs sm:text-sm text-[#788078]">
+                  {language === 'vi'
+                    ? 'Hỏi AI về bài học, bài toán, essay hoặc project.'
+                    : 'Ask AI about homework, complex math, essays, or study projects.'}
+                </p>
+              </div>
+            </div>
+            <Link href="/app/ai" className="shrink-0">
+              <Button
+                variant="outline"
+                className="border-[#E5E1D7] bg-white text-[#26302B] hover:bg-[#DDE8DF] hover:text-[#26302B] rounded-xl font-medium text-xs sm:text-sm px-4"
+              >
+                {language === 'vi' ? 'Hỏi AI →' : 'Ask AI →'}
+              </Button>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        /* ========================================================================= */
+        /*                            ACTIVE USER HOME                               */
+        /* ========================================================================= */
+        <div className="space-y-8 animate-in fade-in duration-300">
+          {/* Active User Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#26302B]">
+                {greetingText}
+              </h1>
+              <p className="text-sm text-[#788078]">
+                {language === 'vi'
+                  ? 'Hôm nay bạn muốn hoàn thành điều gì?'
+                  : 'What would you like to achieve today?'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {profile?.verification_status === 'verified' && (
+                <Badge className="bg-[#DDE8DF] text-[#24302B] border-[#7D9B8A]/30 text-xs gap-1.5 py-1 px-3">
+                  <Sparkles className="h-3 w-3 text-[#7D9B8A]" />
+                  {language === 'vi' ? 'Sinh viên đã xác thực' : 'Verified Student'}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {/* Primary Focus Card ("VIỆC QUAN TRỌNG NHẤT") */}
+          <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 sm:p-7 shadow-xs relative overflow-hidden">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7D9B8A] bg-[#DDE8DF]/50 px-2.5 py-1 rounded-md">
+                {language === 'vi' ? 'VIỆC QUAN TRỌNG NHẤT' : 'PRIMARY FOCUS'}
+              </span>
+              {primaryTask && (
+                <span className="text-xs text-[#788078] flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" />
+                  {primaryTask.start_time} - {primaryTask.end_time} ({primaryTask.duration_minutes}m)
+                </span>
+              )}
+            </div>
+
+            {primaryTask ? (
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-[#7D9B8A] uppercase">
+                      {primaryTask.subject || 'HỌC TẬP'}
+                    </span>
+                    {primaryTask.topic && (
+                      <>
+                        <span className="text-xs text-[#788078]">•</span>
+                        <span className="text-xs text-[#788078]">{primaryTask.topic}</span>
+                      </>
+                    )}
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-[#26302B] mt-1">
+                    {primaryTask.title}
+                  </h2>
+                  {primaryTask.description && (
+                    <p className="text-xs sm:text-sm text-[#788078] mt-1 line-clamp-2">
+                      {primaryTask.description}
+                    </p>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between text-xs text-[#788078]">
+                    <span>
+                      {primaryTask.status === 'completed'
+                        ? language === 'vi' ? 'Đã hoàn thành' : 'Completed'
+                        : language === 'vi' ? 'Đang chờ thực hiện' : 'In Progress'}
+                    </span>
+                    <span className="font-semibold text-[#26302B]">
+                      {primaryTask.status === 'completed' ? '100%' : '80%'}
+                    </span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-[#E5E1D7] overflow-hidden">
+                    <div
+                      className="h-full bg-[#7D9B8A] rounded-full transition-all duration-300"
+                      style={{ width: primaryTask.status === 'completed' ? '100%' : '80%' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-2">
+                  <Button
+                    onClick={() => handleToggleTask(primaryTask)}
+                    className="bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white rounded-xl text-sm font-medium px-5 gap-2"
+                  >
+                    {primaryTask.status === 'completed' ? (
+                      <>
+                        <Check className="h-4 w-4" /> {language === 'vi' ? 'Đã xong' : 'Done'}
+                      </>
+                    ) : (
+                      <>
+                        {language === 'vi' ? 'Hoàn thành →' : 'Mark Done →'}
+                      </>
+                    )}
+                  </Button>
+                  <Link href="/app/calendar">
+                    <Button
+                      variant="outline"
+                      className="border-[#E5E1D7] text-[#26302B] hover:bg-[#DDE8DF] rounded-xl text-sm"
+                    >
+                      {language === 'vi' ? 'Chi tiết lịch' : 'Calendar view'}
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="py-6 text-center space-y-3">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-[#DDE8DF] text-[#7D9B8A]">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-[#26302B]">
+                    {language === 'vi'
+                      ? 'Bạn chưa có nhiệm vụ học tập hôm nay.'
+                      : 'No study tasks scheduled for today.'}
+                  </p>
+                  <p className="text-xs text-[#788078] max-w-sm mx-auto">
+                    {language === 'vi'
+                      ? 'Tạo một nhiệm vụ để duy trì nhịp điệu học tập và tích lũy XP.'
+                      : 'Schedule a task to stay consistent and level up your Life OS.'}
+                  </p>
+                </div>
+                <Link href="/app/calendar">
+                  <Button className="bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white text-xs sm:text-sm rounded-xl mt-2">
+                    {language === 'vi' ? 'Tạo nhiệm vụ →' : 'Create Task →'}
+                  </Button>
+                </Link>
+              </div>
+            )}
+          </div>
+
+          {/* Quick Stats (3 horizontal stats) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              icon={Flame}
+              label={language === 'vi' ? 'Chuỗi học' : 'Study Streak'}
+              value={`${gamification?.streak_days || 0} ${language === 'vi' ? 'ngày' : 'days'}`}
+              sub={language === 'vi' ? 'Duy trì liên tục' : 'Current streak'}
+            />
+            <StatCard
+              icon={Award}
+              label={language === 'vi' ? 'Kinh nghiệm' : 'Experience'}
+              value={`${(gamification?.xp || 0).toLocaleString()} XP`}
+              sub={`${language === 'vi' ? 'Cấp' : 'Level'} ${gamification?.level || 1}`}
+            />
+            <StatCard
+              icon={BookOpen}
+              label={language === 'vi' ? 'Hôm nay' : 'Today'}
+              value={`${completedTasksCount} / ${todayTasks.length} ${language === 'vi' ? 'nhiệm vụ' : 'tasks'}`}
+              sub={
+                todayTasks.length > 0 && completedTasksCount === todayTasks.length
+                  ? language === 'vi' ? 'Hoàn thành tất cả' : 'All done'
+                  : language === 'vi' ? 'Tiến độ hoàn thành' : 'Progress today'
+              }
+            />
+          </div>
+
+          {/* 2-Column Dashboard Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* Left Column (7 cols) */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Today's Tasks ("VIỆC HÔM NAY") */}
+              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-bold text-base text-[#26302B]">
+                      {language === 'vi' ? 'VIỆC HÔM NAY' : "TODAY'S TASKS"}
+                    </h3>
+                    <Badge className="bg-[#DDE8DF] text-[#26302B] text-[11px] font-semibold border-0">
+                      {todayTasks.length}
+                    </Badge>
+                  </div>
+                  <Link
+                    href="/app/calendar"
+                    className="text-xs font-medium text-[#7D9B8A] hover:underline flex items-center gap-1"
+                  >
+                    {language === 'vi' ? 'Xem lịch →' : 'Open calendar →'}
+                  </Link>
+                </div>
+
+                {todayTasks.length === 0 ? (
+                  <div className="py-8 text-center space-y-2 border border-dashed border-[#E5E1D7] rounded-xl">
+                    <p className="text-sm font-medium text-[#26302B]">
+                      {language === 'vi' ? 'Chưa có nhiệm vụ hôm nay.' : 'No tasks scheduled today.'}
+                    </p>
+                    <p className="text-xs text-[#788078]">
+                      {language === 'vi' ? 'Bắt đầu ngày mới với một kế hoạch rõ ràng.' : 'Plan your study sessions for today.'}
+                    </p>
+                    <Link href="/app/calendar">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-[#E5E1D7] text-[#7D9B8A] hover:bg-[#DDE8DF] rounded-xl text-xs mt-2"
+                      >
+                        {language === 'vi' ? 'Tạo nhiệm vụ đầu tiên →' : 'Create first task →'}
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {todayTasks.slice(0, 5).map((task) => {
+                      const isDone = task.status === 'completed';
+                      return (
+                        <div
+                          key={task.id}
+                          className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                            isDone
+                              ? 'bg-[#F4F1E8]/50 border-transparent text-[#788078]'
+                              : 'bg-white border-[#E5E1D7] hover:border-[#7D9B8A]/40 text-[#26302B]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <button
+                              onClick={() => handleToggleTask(task)}
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                                isDone
+                                  ? 'bg-[#7D9B8A] border-[#7D9B8A] text-white'
+                                  : 'border-[#E5E1D7] hover:border-[#7D9B8A]'
+                              }`}
+                              aria-label="Toggle task status"
+                            >
+                              {isDone && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                            </button>
+
+                            <span className="text-xs font-mono text-[#788078] shrink-0">
+                              {task.start_time}
+                            </span>
+
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] px-1.5 py-0 border-[#E5E1D7] bg-[#DDE8DF]/40 text-[#26302B] shrink-0 uppercase"
+                            >
+                              {task.subject || 'Study'}
+                            </Badge>
+
+                            <span
+                              className={`text-sm truncate font-medium ${
+                                isDone ? 'line-through text-[#788078]' : 'text-[#26302B]'
+                              }`}
+                            >
+                              {task.title}
+                            </span>
+                          </div>
+
+                          <span className="text-[11px] text-[#788078] shrink-0 ml-2">
+                            {task.duration_minutes}m
                           </span>
-                          <span className="font-semibold text-foreground">{part.progress || 0}%</span>
                         </div>
-                        <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Study Progress Chart ("TIẾN ĐỘ HỌC") */}
+              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-display font-bold text-base text-[#26302B]">
+                      {language === 'vi' ? 'TIẾN ĐỘ HỌC' : 'STUDY PROGRESS'}
+                    </h3>
+                    <p className="text-xs text-[#788078]">
+                      {Math.floor(totalWeeklyMinutes / 60)}h {totalWeeklyMinutes % 60}m{' '}
+                      {language === 'vi' ? 'tuần này' : 'this week'}
+                    </p>
+                  </div>
+                  <Link
+                    href="/app/study?tab=progress"
+                    className="text-xs font-medium text-[#7D9B8A] hover:underline"
+                  >
+                    {language === 'vi' ? 'Chi tiết →' : 'Details →'}
+                  </Link>
+                </div>
+
+                {/* 7-day Bar Chart */}
+                <div className="pt-4">
+                  <div className="grid grid-cols-7 gap-2 items-end h-32 border-b border-[#E5E1D7] pb-2">
+                    {dailyStudyMinutes.map((day, idx) => {
+                      const heightPercent =
+                        day.minutes > 0
+                          ? Math.max(12, Math.round((day.minutes / maxDailyMinute) * 100))
+                          : 4;
+                      return (
+                        <div key={idx} className="flex flex-col items-center gap-1.5 h-full justify-end group">
+                          <div className="text-[10px] text-[#788078] opacity-0 group-hover:opacity-100 transition-opacity font-mono">
+                            {day.minutes > 0 ? `${day.minutes}m` : '0'}
+                          </div>
                           <div
-                            className="h-full rounded-full bg-primary transition-all duration-300"
-                            style={{ width: `${part.progress || 0}%` }}
+                            className="w-full max-w-[28px] rounded-t-md transition-all duration-300 group-hover:brightness-95"
+                            style={{
+                              height: `${heightPercent}%`,
+                              backgroundColor: day.minutes > 0 ? '#7D9B8A' : '#E5E1D7',
+                            }}
                           />
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
+                      );
+                    })}
+                  </div>
+                  {/* Day labels */}
+                  <div className="grid grid-cols-7 gap-2 pt-2 text-center">
+                    {dailyStudyMinutes.map((day, idx) => (
+                      <span key={idx} className="text-[11px] font-medium text-[#788078]">
+                        {day.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-      {/* Recruiting Projects */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-display font-bold">Projects Looking for Members</h2>
-          <Link href="/app/projects">
-            <Button variant="ghost" size="sm" className="gap-1">View all <ArrowRight className="h-3.5 w-3.5" /></Button>
-          </Link>
-        </div>
-        {projects.length === 0 ? (
-          <EmptyState icon={Target} text="No recruiting projects yet" />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {projects.map((p) => (
-              <Link key={p.id} href={`/app/projects/${p.id}`}>
-                <Card className="group cursor-pointer border-border/60 hover:border-primary/40 hover:shadow-md transition-all duration-300 h-full">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-2">
-                      <h3 className="font-semibold group-hover:text-primary transition-colors">{p.name}</h3>
-                      <Badge variant="outline" className="text-xs">{p.members_count} {t('members')}</Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">{p.description}</p>
-                    {p.roles_needed.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {p.roles_needed.slice(0, 3).map((r) => (
-                          <Badge key={r} variant="secondary" className="text-xs">{r}</Badge>
-                        ))}
+            {/* Right Column (5 cols) */}
+            <div className="lg:col-span-5 space-y-6">
+              {/* Active Challenge Card */}
+              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7D9B8A]">
+                    {language === 'vi' ? 'THỬ THÁCH' : 'ACTIVE CHALLENGE'}
+                  </span>
+                  <Link
+                    href="/app/study?tab=challenges"
+                    className="text-xs text-[#788078] hover:text-[#26302B]"
+                  >
+                    {language === 'vi' ? 'Tất cả →' : 'All →'}
+                  </Link>
+                </div>
+
+                {activeChallenge && activeChallenge.challenge ? (
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <span className="text-2xl">
+                        {activeChallenge.challenge.icon || '🏆'}
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-sm text-[#26302B] truncate">
+                          {activeChallenge.challenge.title}
+                        </h4>
+                        <p className="text-xs text-[#788078]">
+                          {language === 'vi' ? 'Ngày' : 'Day'}{' '}
+                          {Math.min(
+                            activeChallenge.streak + 1,
+                            activeChallenge.challenge.duration_days
+                          )}{' '}
+                          / {activeChallenge.challenge.duration_days}
+                        </p>
                       </div>
-                    )}
-                    <div className="flex items-center gap-2 mt-3">
-                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-primary to-chart-2" style={{ width: `${p.progress}%` }} />
-                      </div>
-                      <span className="text-xs text-muted-foreground">{p.progress}%</span>
                     </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs text-[#788078]">
+                        <span>{activeChallenge.progress || 0}%</span>
+                        <span className="text-[#26302B] font-medium">
+                          🔥 {activeChallenge.streak || 0} {language === 'vi' ? 'ngày streak' : 'd streak'}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-[#E5E1D7] overflow-hidden">
+                        <div
+                          className="h-full bg-[#7D9B8A] rounded-full transition-all"
+                          style={{ width: `${activeChallenge.progress || 0}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <Link href="/app/study?tab=challenges">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-[#E5E1D7] text-[#26302B] hover:bg-[#DDE8DF] rounded-xl text-xs mt-1"
+                      >
+                        {language === 'vi' ? 'Xem thử thách →' : 'View challenge →'}
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="py-4 text-center space-y-2">
+                    <p className="text-xs text-[#788078]">
+                      {language === 'vi'
+                        ? 'Bạn chưa tham gia thử thách nào.'
+                        : 'No active challenges joined yet.'}
+                    </p>
+                    <Link href="/app/study?tab=challenges">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-[#E5E1D7] text-[#7D9B8A] hover:bg-[#DDE8DF] rounded-xl text-xs"
+                      >
+                        {language === 'vi' ? 'Khám phá thử thách →' : 'Explore challenges →'}
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Study Card */}
+              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-5 shadow-xs space-y-2.5">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#DDE8DF] text-base text-[#24302B]">
+                    🤖
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-xs text-[#26302B]">AI Study</h4>
+                    <p className="text-[11px] text-[#788078]">
+                      {language === 'vi' ? 'Cần trợ giúp học tập?' : 'Need study help?'}
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-[#788078] leading-relaxed">
+                  {language === 'vi'
+                    ? 'Hỏi AI về bài học, bài toán, essay hoặc project.'
+                    : 'Ask questions about complex lessons, math solutions, or essay feedback.'}
+                </p>
+                <Link href="/app/ai" className="block pt-1">
+                  <Button
+                    size="sm"
+                    className="w-full bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white rounded-xl text-xs font-medium"
+                  >
+                    {language === 'vi' ? 'Hỏi AI →' : 'Ask AI →'}
+                  </Button>
+                </Link>
+              </div>
+
+              {/* My Life Preview ("CUỘC SỐNG") */}
+              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-6 shadow-xs space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[#7D9B8A]">
+                    {language === 'vi' ? 'CUỘC SỐNG' : 'MY LIFE'}
+                  </span>
+                  <Link href="/app/my-life" className="text-xs text-[#788078] hover:text-[#26302B]">
+                    {language === 'vi' ? 'Mở My Life →' : 'Open →'}
+                  </Link>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  {/* Journal */}
+                  <Link
+                    href="/app/my-life"
+                    className="flex items-center justify-between p-2.5 rounded-xl border border-[#E5E1D7] hover:bg-[#DDE8DF]/30 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-[#26302B] font-medium">
+                      🌿 {language === 'vi' ? 'Nhật ký' : 'Journal'}
+                    </span>
+                    <span className="text-[#788078] flex items-center gap-1">
+                      {hasJournalToday
+                        ? language === 'vi' ? 'Đã viết hôm nay ✓' : 'Written today ✓'
+                        : language === 'vi' ? 'Viết nhật ký hôm nay →' : 'Write today →'}
+                    </span>
+                  </Link>
+
+                  {/* Habits */}
+                  <Link
+                    href="/app/my-life"
+                    className="flex items-center justify-between p-2.5 rounded-xl border border-[#E5E1D7] hover:bg-[#DDE8DF]/30 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-[#26302B] font-medium">
+                      ✓ {language === 'vi' ? 'Thói quen' : 'Habits'}
+                    </span>
+                    <span className="text-[#788078]">
+                      {todayHabitLogs.length} / {habits.length}{' '}
+                      {language === 'vi' ? 'hoàn thành →' : 'completed →'}
+                    </span>
+                  </Link>
+
+                  {/* Mood */}
+                  <Link
+                    href="/app/my-life"
+                    className="flex items-center justify-between p-2.5 rounded-xl border border-[#E5E1D7] hover:bg-[#DDE8DF]/30 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 text-[#26302B] font-medium">
+                      ☁ {language === 'vi' ? 'Tâm trạng' : 'Mood'}
+                    </span>
+                    <span className="text-[#788078]">
+                      {latestMood
+                        ? `${latestMood.mood}/5`
+                        : language === 'vi'
+                        ? 'Hôm nay bạn thế nào?'
+                        : 'How are you feeling?'}
+                    </span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Community CTA */}
+              <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-5 flex items-center justify-between shadow-xs">
+                <div className="space-y-0.5">
+                  <h4 className="font-semibold text-xs text-[#26302B]">
+                    {language === 'vi' ? 'Cộng đồng học sinh' : 'Student Community'}
+                  </h4>
+                  <p className="text-[11px] text-[#788078]">
+                    {language === 'vi' ? 'Chia sẻ tài liệu & tìm bạn cùng học' : 'Share study decks & find study buddies'}
+                  </p>
+                </div>
+                <Link href="/app/community">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-[#E5E1D7] text-[#26302B] hover:bg-[#DDE8DF] rounded-xl text-xs shrink-0"
+                  >
+                    {language === 'vi' ? 'Khám phá →' : 'Explore →'}
+                  </Button>
+                </Link>
+              </div>
+            </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 }
 
-function StatCard({ icon: Icon, label, value, href, color, bg }: { icon: React.ElementType; label: string; value: string; href: string; color: string; bg: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  sub: string;
+}) {
   return (
-    <Link href={href}>
-      <Card className="border-border/60 hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer">
-        <CardContent className="p-4">
-          <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-lg ${bg}`}>
-            <Icon className={`h-4.5 w-4.5 ${color}`} />
-          </div>
-          <p className="text-lg font-bold font-display">{value}</p>
-          <p className="text-xs text-muted-foreground">{label}</p>
-        </CardContent>
-      </Card>
+    <div className="rounded-2xl border border-[#E5E1D7] bg-[#FFFFFF] p-5 flex items-center gap-4 shadow-xs">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#DDE8DF] text-[#7D9B8A]">
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs text-[#788078] font-medium">{label}</p>
+        <p className="text-lg font-bold text-[#26302B] tracking-tight">{value}</p>
+        <p className="text-[11px] text-[#788078] truncate">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+function QuickStartCard({
+  icon: Icon,
+  title,
+  subtitle,
+  href,
+}: {
+  icon: React.ElementType;
+  title: string;
+  subtitle: string;
+  href: string;
+}) {
+  return (
+    <Link href={href} className="block group">
+      <div className="rounded-xl border border-[#E5E1D7] bg-[#FFFFFF] p-4 flex items-center gap-3.5 hover:border-[#7D9B8A]/40 hover:bg-[#DDE8DF]/20 transition-all shadow-2xs cursor-pointer">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DDE8DF]/70 text-[#24302B] group-hover:bg-[#7D9B8A] group-hover:text-white transition-colors">
+          <Icon className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0">
+          <h4 className="text-[11px] font-bold text-[#7D9B8A] tracking-wider uppercase">
+            {title}
+          </h4>
+          <p className="text-xs font-medium text-[#26302B] group-hover:text-[#24302B] truncate">
+            {subtitle}
+          </p>
+        </div>
+      </div>
     </Link>
   );
 }
 
-function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
+function JourneyStep({
+  stepNumber,
+  title,
+  description,
+  completed,
+  href,
+}: {
+  stepNumber: string;
+  title: string;
+  description: string;
+  completed: boolean;
+  href: string;
+}) {
   return (
-    <Card className="border-dashed border-border/60">
-      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-        <Icon className="h-10 w-10 text-muted-foreground/40 mb-3" />
-        <p className="text-sm text-muted-foreground">{text}</p>
-      </CardContent>
-    </Card>
+    <Link href={href} className="block group">
+      <div
+        className={`p-4 rounded-xl border transition-all ${
+          completed
+            ? 'border-[#7D9B8A]/40 bg-[#DDE8DF]/20'
+            : 'border-[#E5E1D7] bg-[#FFFFFF] hover:border-[#7D9B8A]/30'
+        }`}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[11px] font-mono font-bold text-[#7D9B8A]">
+            {stepNumber}
+          </span>
+          <div
+            className={`h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+              completed
+                ? 'bg-[#7D9B8A] text-white'
+                : 'border border-[#E5E1D7] text-[#788078]'
+            }`}
+          >
+            {completed ? '✓' : '○'}
+          </div>
+        </div>
+        <h4 className="text-xs font-bold text-[#26302B] group-hover:text-[#7D9B8A] transition-colors">
+          {title}
+        </h4>
+        <p className="text-[11px] text-[#788078] mt-0.5">{description}</p>
+      </div>
+    </Link>
   );
 }

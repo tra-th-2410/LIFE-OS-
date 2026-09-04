@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,6 +46,17 @@ import { StudyProgressView } from '@/components/study/study-progress-view';
 import { StudyLibraryView } from '@/components/study/study-library-view';
 import { FocusModeDialog } from '@/components/study/focus-mode-dialog';
 import { toast } from 'sonner';
+
+function StudyTabSync({ onTabChange }: { onTabChange: (tab: 'quiz' | 'library' | 'progress' | 'challenges') => void }) {
+  const searchParams = useSearchParams();
+  const tab = searchParams?.get('tab');
+  useEffect(() => {
+    if (tab === 'challenges' || tab === 'progress' || tab === 'library' || tab === 'quiz') {
+      onTabChange(tab);
+    }
+  }, [tab, onTabChange]);
+  return null;
+}
 
 const CATEGORIES: { value: ChallengeCategory; label: string }[] = [
   { value: 'study', label: 'Study' },
@@ -510,6 +521,9 @@ export default function StudyPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      <Suspense fallback={null}>
+        <StudyTabSync onTabChange={setMainSection} />
+      </Suspense>
       {/* Top Level Section Navigation Pills */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1">
         <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-muted/60 border border-border/60 overflow-x-auto scrollbar-none">

@@ -1,26 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Home,
-  Users,
-  Target,
   BookOpen,
-  Heart,
+  Users,
   Bot,
-  Bell,
+  Heart,
   User,
+  Settings,
+  Bell,
   Search,
   Menu,
   X,
   LogOut,
-  Sparkles,
   Shield,
   MessageSquare,
   FileCheck,
-  CalendarDays,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { useLanguage } from '@/components/language-provider';
@@ -33,14 +31,21 @@ import { supabase } from '@/lib/supabase';
 import { initials, getDisplayName } from '@/lib/helpers';
 import { toast } from 'sonner';
 
-const navItems = [
-  { href: '/app', label: 'Home', icon: Home },
-  { href: '/app/community', label: 'Community', icon: Users },
-  { href: '/app/projects', label: 'Projects', icon: Target },
-  { href: '/app/study', label: 'Study', icon: BookOpen },
-  { href: '/app/calendar', label: 'Calendar', icon: CalendarDays },
-  { href: '/app/ai', label: 'AI Center', icon: Bot },
-  { href: '/app/my-life', label: 'My Life', icon: Heart },
+interface NavItem {
+  href: string;
+  label: string;
+  labelVi: string;
+  icon: React.ElementType;
+}
+
+const navItems: NavItem[] = [
+  { href: '/app', label: 'Home', labelVi: 'Trang chủ', icon: Home },
+  { href: '/app/study', label: 'Study', labelVi: 'Học tập', icon: BookOpen },
+  { href: '/app/community', label: 'Community', labelVi: 'Cộng đồng', icon: Users },
+  { href: '/app/ai', label: 'AI', labelVi: 'Trí tuệ nhân tạo', icon: Bot },
+  { href: '/app/my-life', label: 'My Life', labelVi: 'Cuộc sống', icon: Heart },
+  { href: '/app/profile', label: 'Profile', labelVi: 'Hồ sơ', icon: User },
+  { href: '/app/settings', label: 'Settings', labelVi: 'Cài đặt', icon: Settings },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -100,7 +105,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   description: notif.body ?? undefined,
                 });
 
-                // Desktop / Browser native notification if permission granted
                 if (
                   typeof window !== 'undefined' &&
                   'Notification' in window &&
@@ -127,13 +131,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [user, refreshUnreadCount]);
 
-
   if (loading || (user && !profile)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <div className="h-10 w-10 animate-pulse rounded-xl bg-primary/20" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-muted-foreground">Loading Life OS...</p>
         </div>
       </div>
     );
@@ -147,27 +150,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.push('/');
   };
 
-  const isActive = (href: string) => {
-    if (href === '/app') return pathname === '/app';
-    if (href === '/app/ai') return pathname.startsWith('/app/ai') || pathname.startsWith('/app/study-coach');
-    return pathname.startsWith(href);
-  };
-
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile header */}
-      <header className="lg:hidden sticky top-0 z-40 glass border-b border-border/50">
+      <header className="lg:hidden sticky top-0 z-40 bg-background/90 backdrop-blur-md border-b border-border">
         <div className="flex h-14 items-center justify-between px-4">
-          <button onClick={() => setSidebarOpen(true)} className="p-2 -ml-2">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-2 text-foreground hover:bg-muted rounded-lg transition-colors"
+            aria-label="Open menu"
+          >
             <Menu className="h-5 w-5" />
           </button>
           <Link href="/app" className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-              L
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#7D9B8A] text-white font-bold text-xs shadow-xs">
+              🌿
             </div>
-            <span className="font-display font-bold">Life OS</span>
+            <span className="font-display font-bold text-foreground">Life OS</span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <LanguageSwitcher />
             <ThemeToggle />
           </div>
@@ -177,60 +178,69 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setSidebarOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 bg-sidebar border-r border-sidebar-border animate-slide-in-right">
-            <div className="flex h-14 items-center justify-between px-4 border-b border-sidebar-border">
-              <Link href="/app" className="flex items-center gap-2" onClick={() => setSidebarOpen(false)}>
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-                  L
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSidebarOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-72 bg-[#24302B] text-[#DDE8DF] border-r border-[#1e2824] animate-slide-in-right flex flex-col shadow-2xl">
+            <div className="flex h-16 items-center justify-between px-5 border-b border-[#2d3d36]">
+              <Link href="/app" className="flex items-center gap-2.5" onClick={() => setSidebarOpen(false)}>
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#7D9B8A] text-white font-bold text-sm shadow-xs">
+                  🌿
                 </div>
-                <span className="font-display font-bold">Life OS</span>
+                <div className="flex flex-col">
+                  <span className="font-display font-bold text-base text-white tracking-tight">Life OS</span>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider text-[#DDE8DF]/60">Student System</span>
+                </div>
               </Link>
-              <button onClick={() => setSidebarOpen(false)} className="p-2 -mr-2">
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1.5 text-[#DDE8DF]/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <SidebarContent
-              pathname={pathname}
-              isActive={isActive}
-              profile={profile}
-              unreadCount={unreadCount}
-              isAdmin={isAdmin}
-              onNavigate={() => setSidebarOpen(false)}
-              onSignOut={handleSignOut}
-            />
+            <Suspense fallback={<SidebarNavFallback />}>
+              <SidebarContent
+                pathname={pathname}
+                isAdmin={isAdmin}
+                unreadCount={unreadCount}
+                onNavigate={() => setSidebarOpen(false)}
+                onSignOut={handleSignOut}
+              />
+            </Suspense>
           </div>
         </div>
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-sidebar-border bg-sidebar">
-        <div className="flex h-16 items-center gap-2 px-6 border-b border-sidebar-border">
-          <Link href="/app" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-primary-foreground font-bold">
-              L
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-[#1e2824] bg-[#24302B] text-[#DDE8DF]">
+        <div className="flex h-16 items-center gap-3 px-6 border-b border-[#2d3d36]">
+          <Link href="/app" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#7D9B8A] text-white font-bold text-sm shadow-xs">
+              🌿
             </div>
-            <span className="font-display font-bold text-lg">Life OS</span>
+            <div className="flex flex-col">
+              <span className="font-display font-bold text-lg text-white tracking-tight">Life OS</span>
+              <span className="text-[10px] uppercase font-semibold tracking-wider text-[#DDE8DF]/60">Personal System</span>
+            </div>
           </Link>
         </div>
-        <SidebarContent
-          pathname={pathname}
-          isActive={isActive}
-          profile={profile}
-          unreadCount={unreadCount}
-          isAdmin={isAdmin}
-          onSignOut={handleSignOut}
-        />
+        <Suspense fallback={<SidebarNavFallback />}>
+          <SidebarContent
+            pathname={pathname}
+            isAdmin={isAdmin}
+            unreadCount={unreadCount}
+            onSignOut={handleSignOut}
+          />
+        </Suspense>
       </aside>
 
-      {/* Main content */}
+      {/* Main content area */}
       <div className="lg:pl-64">
         {/* Desktop top bar */}
-        <header className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between px-8 glass border-b border-border/50">
+        <header className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between px-8 bg-background/85 backdrop-blur-md border-b border-border">
           <div className="relative w-full max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Link href="/app/search" className="block">
-              <div className="w-full rounded-lg border border-input bg-muted/50 px-10 py-2 text-sm text-muted-foreground hover:bg-muted transition-colors">
+              <div className="w-full rounded-xl border border-border bg-card px-10 py-2 text-sm text-muted-foreground hover:border-primary/50 hover:bg-card/90 transition-colors shadow-2xs">
                 {t('Search communities, projects, people...')}
               </div>
             </Link>
@@ -239,21 +249,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <LanguageSwitcher />
             <ThemeToggle />
             <Link href="/app/notifications">
-              <Button variant="ghost" size="icon" className="relative h-9 w-9">
-                <Bell className="h-4 w-4" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative h-9 w-9 rounded-xl hover:bg-muted text-foreground"
+              >
+                <Bell className="h-4.5 w-4.5 text-muted-foreground" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7D9B8A] px-1 text-[10px] font-bold text-white shadow-xs">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </Button>
             </Link>
             <Link href={profile ? `/app/profile/${profile.username}` : '/app/profile'}>
-              <Avatar className="h-9 w-9 border-2 border-transparent hover:border-primary/30 transition-colors">
+              <Avatar className="h-9 w-9 border-2 border-transparent hover:border-primary/40 transition-colors">
                 {profile?.avatar_url && (
-                  <img src={profile.avatar_url} alt={getDisplayName(profile)} className="h-full w-full object-cover rounded-full" />
+                  <img
+                    src={profile.avatar_url}
+                    alt={getDisplayName(profile)}
+                    className="h-full w-full object-cover rounded-full"
+                  />
                 )}
-                <AvatarFallback className="bg-primary/10 text-primary text-sm font-semibold">
+                <AvatarFallback className="bg-[#7D9B8A]/15 text-[#24302B] dark:text-[#DDE8DF] text-xs font-semibold">
                   {initials(getDisplayName(profile))}
                 </AvatarFallback>
               </Avatar>
@@ -261,139 +279,165 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="p-4 lg:p-8">{children}</main>
+        <main className="p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
+    </div>
+  );
+}
+
+function SidebarNavFallback() {
+  return (
+    <div className="flex-1 space-y-2 p-4">
+      {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+        <div key={i} className="h-9 rounded-xl bg-white/5 animate-pulse" />
+      ))}
     </div>
   );
 }
 
 function SidebarContent({
   pathname,
-  isActive,
-  profile,
-  unreadCount,
   isAdmin,
+  unreadCount,
   onNavigate,
   onSignOut,
 }: {
   pathname: string;
-  isActive: (href: string) => boolean;
-  profile: { username: string; verification_status: string } | null;
-  unreadCount: number;
   isAdmin: boolean;
+  unreadCount: number;
   onNavigate?: () => void;
   onSignOut: () => void;
 }) {
-  const { t } = useLanguage();
+  const { language, t } = useLanguage();
+
+  const isItemActive = (href: string) => {
+    if (href === '/app') {
+      return pathname === '/app';
+    }
+    if (href === '/app/study') {
+      return pathname.startsWith('/app/study');
+    }
+    if (href === '/app/community') {
+      return pathname.startsWith('/app/community');
+    }
+    if (href === '/app/ai') {
+      return pathname.startsWith('/app/ai') || pathname.startsWith('/app/study-coach');
+    }
+    if (href === '/app/my-life') {
+      return pathname.startsWith('/app/my-life');
+    }
+    if (href === '/app/profile') {
+      return pathname === '/app/profile' || pathname.startsWith('/app/profile/');
+    }
+    if (href === '/app/settings') {
+      return pathname.startsWith('/app/settings');
+    }
+    return pathname.startsWith(href);
+  };
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto scrollbar-thin">
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navItems.map((item) => {
-          const active = isActive(item.href);
+          const active = isItemActive(item.href);
+          const Icon = item.icon;
+          const displayLabel = language === 'vi' ? item.labelVi : item.label;
+
           return (
             <Link
               key={item.href}
               href={item.href}
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
                 active
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  ? 'bg-[#7D9B8A] text-white shadow-xs'
+                  : 'text-[#DDE8DF]/80 hover:bg-white/10 hover:text-white'
               }`}
             >
-              <item.icon className="h-5 w-5" />
-              {t(item.label)}
-              {item.href === '/app/ai' && (
-                <Sparkles className="ml-auto h-3 w-3 text-primary" />
-              )}
+              <Icon
+                className={`h-4.5 w-4.5 shrink-0 transition-colors ${
+                  active ? 'text-white' : 'text-[#DDE8DF]/70 group-hover:text-white'
+                }`}
+              />
+              <span className="truncate">{displayLabel}</span>
             </Link>
           );
         })}
 
-        <div className="my-3 border-t border-sidebar-border" />
-
+        {/* Notifications item in sidebar */}
         <Link
           href="/app/notifications"
           onClick={onNavigate}
-          className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            isActive('/app/notifications')
-              ? 'bg-primary/10 text-primary'
-              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+          className={`group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
+            pathname.startsWith('/app/notifications')
+              ? 'bg-[#7D9B8A] text-white shadow-xs'
+              : 'text-[#DDE8DF]/80 hover:bg-white/10 hover:text-white'
           }`}
         >
-          <Bell className="h-5 w-5" />
-          {t('Notifications')}
+          <Bell className="h-4.5 w-4.5 shrink-0 text-[#DDE8DF]/70 group-hover:text-white" />
+          <span className="truncate">{language === 'vi' ? 'Thông báo' : 'Notifications'}</span>
           {unreadCount > 0 && (
-            <Badge className="ml-auto h-5 min-w-5 px-1.5 text-xs">{unreadCount}</Badge>
+            <Badge className="ml-auto h-5 min-w-5 px-1.5 text-[10px] bg-[#7D9B8A] text-white border-0">
+              {unreadCount}
+            </Badge>
           )}
         </Link>
-        <Link
-          href={profile ? `/app/profile/${profile.username}` : '/app/profile'}
-          onClick={onNavigate}
-          className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-            pathname.startsWith('/app/profile')
-              ? 'bg-primary/10 text-primary'
-              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
-          }`}
-        >
-          <User className="h-5 w-5" />
-          {t('Profile')}
-        </Link>
 
+        {/* Admin Navigation Section */}
         {isAdmin && (
           <>
-            <div className="my-3 border-t border-sidebar-border" />
-            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/50">
+            <div className="my-3 border-t border-[#2d3d36]" />
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#DDE8DF]/50">
               {t('Admin')}
             </p>
             <Link
               href="/app/admin"
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
                 pathname === '/app/admin'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  ? 'bg-[#7D9B8A] text-white'
+                  : 'text-[#DDE8DF]/75 hover:bg-white/10 hover:text-white'
               }`}
             >
-              <Shield className="h-5 w-5" />
-              {t('Admin Dashboard')}
+              <Shield className="h-4 w-4" />
+              <span>{t('Admin Dashboard')}</span>
             </Link>
             <Link
               href="/app/admin/verifications"
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
                 pathname === '/app/admin/verifications'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  ? 'bg-[#7D9B8A] text-white'
+                  : 'text-[#DDE8DF]/75 hover:bg-white/10 hover:text-white'
               }`}
             >
-              <FileCheck className="h-5 w-5" />
-              {t('Verification Requests')}
+              <FileCheck className="h-4 w-4" />
+              <span>{t('Verification Requests')}</span>
             </Link>
             <Link
               href="/app/admin/forum-moderation"
               onClick={onNavigate}
-              className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-3 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
                 pathname === '/app/admin/forum-moderation'
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground'
+                  ? 'bg-[#7D9B8A] text-white'
+                  : 'text-[#DDE8DF]/75 hover:bg-white/10 hover:text-white'
               }`}
             >
-              <MessageSquare className="h-5 w-5" />
-              {t('Forum Moderation')}
+              <MessageSquare className="h-4 w-4" />
+              <span>{t('Forum Moderation')}</span>
             </Link>
           </>
         )}
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
+      {/* Logout button at bottom */}
+      <div className="border-t border-[#2d3d36] p-3">
         <button
           onClick={onSignOut}
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-destructive/10 hover:text-destructive transition-colors"
+          className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#DDE8DF]/80 hover:bg-red-500/15 hover:text-red-300 transition-colors"
         >
-          <LogOut className="h-5 w-5" />
-          {t('Sign out')}
+          <LogOut className="h-4.5 w-4.5" />
+          <span>{language === 'vi' ? 'Đăng xuất' : 'Sign out'}</span>
         </button>
       </div>
     </div>
