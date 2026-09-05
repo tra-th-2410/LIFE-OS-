@@ -13,8 +13,8 @@ export const metadata: Metadata = {
   description:
     'A safe space to learn, connect, build projects, and grow. Not another social media trap.',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0a1518' },
+    { media: '(prefers-color-scheme: light)', color: '#F3EDE2' },
+    { media: '(prefers-color-scheme: dark)', color: '#1F211F' },
   ],
 };
 

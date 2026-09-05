@@ -32,6 +32,16 @@ const config: Config = {
         },
         primary: {
           DEFAULT: 'hsl(var(--primary))',
+          dark: 'hsl(var(--primary-dark))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        charcoal: {
+          DEFAULT: 'hsl(var(--charcoal))',
+          foreground: 'hsl(var(--charcoal-foreground))',
+        },
+        terracotta: {
+          DEFAULT: 'hsl(var(--primary))',
+          dark: 'hsl(var(--primary-dark))',
           foreground: 'hsl(var(--primary-foreground))',
         },
         secondary: {
@@ -75,6 +85,7 @@ const config: Config = {
         sidebar: {
           DEFAULT: 'hsl(var(--sidebar))',
           foreground: 'hsl(var(--sidebar-foreground))',
+          muted: 'hsl(var(--sidebar-muted))',
           accent: 'hsl(var(--sidebar-accent))',
           border: 'hsl(var(--sidebar-border))',
         },

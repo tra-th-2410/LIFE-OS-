@@ -165,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
           <Link href="/app" className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#7D9B8A] text-white font-bold text-xs shadow-xs">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-white font-bold text-xs shadow-xs">
               🌿
             </div>
             <span className="font-display font-bold text-foreground">Life OS</span>
@@ -181,20 +181,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-xs" onClick={() => setSidebarOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-72 bg-[#24302B] text-[#DDE8DF] border-r border-[#1e2824] animate-slide-in-right flex flex-col shadow-2xl">
-            <div className="flex h-16 items-center justify-between px-5 border-b border-[#2d3d36]">
+          <div className="absolute left-0 top-0 h-full w-72 bg-sidebar text-sidebar-foreground border-r border-sidebar-border animate-slide-in-right flex flex-col shadow-2xl">
+            <div className="flex h-16 items-center justify-between px-5 border-b border-sidebar-border">
               <Link href="/app" className="flex items-center gap-2.5" onClick={() => setSidebarOpen(false)}>
-                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#7D9B8A] text-white font-bold text-sm shadow-xs">
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-white font-bold text-sm shadow-xs">
                   🌿
                 </div>
                 <div className="flex flex-col">
                   <span className="font-display font-bold text-base text-white tracking-tight">Life OS</span>
-                  <span className="text-[10px] uppercase font-semibold tracking-wider text-[#DDE8DF]/60">Student System</span>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider text-sidebar-muted/70">Student System</span>
                 </div>
               </Link>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="p-1.5 text-[#DDE8DF]/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="p-1.5 text-sidebar-muted hover:text-white hover:bg-white/10 rounded-lg transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -213,15 +213,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-[#1e2824] bg-[#24302B] text-[#DDE8DF]">
-        <div className="flex h-16 items-center gap-3 px-6 border-b border-[#2d3d36]">
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+        <div className="flex h-16 items-center gap-3 px-6 border-b border-sidebar-border">
           <Link href="/app" className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#7D9B8A] text-white font-bold text-sm shadow-xs">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-white font-bold text-sm shadow-xs">
               🌿
             </div>
             <div className="flex flex-col">
               <span className="font-display font-bold text-lg text-white tracking-tight">Life OS</span>
-              <span className="text-[10px] uppercase font-semibold tracking-wider text-[#DDE8DF]/60">Personal System</span>
+              <span className="text-[10px] uppercase font-semibold tracking-wider text-sidebar-muted/70">Personal System</span>
             </div>
           </Link>
         </div>
@@ -238,7 +238,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content area */}
       <div className="lg:pl-64">
         {/* Desktop top bar */}
-        <header className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between px-8 bg-background/85 backdrop-blur-md border-b border-border">
+        <header className="hidden lg:flex sticky top-0 z-30 h-16 items-center justify-between px-8 bg-background/90 backdrop-blur-md border-b border-border">
           <div className="relative w-full max-w-md">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Link href="/app/search" className="block">
@@ -258,7 +258,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Bell className="h-4.5 w-4.5 text-muted-foreground" />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#7D9B8A] px-1 text-[10px] font-bold text-white shadow-xs">
+                  <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-white shadow-xs">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -273,7 +273,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     className="h-full w-full object-cover rounded-full"
                   />
                 )}
-                <AvatarFallback className="bg-[#7D9B8A]/15 text-[#24302B] dark:text-[#DDE8DF] text-xs font-semibold">
+                <AvatarFallback className="bg-primary/15 text-foreground text-xs font-semibold">
                   {initials(getDisplayName(profile))}
                 </AvatarFallback>
               </Avatar>
@@ -355,13 +355,13 @@ function SidebarContent({
               onClick={onNavigate}
               className={`group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
                 active
-                  ? 'bg-[#7D9B8A] text-white shadow-xs'
-                  : 'text-[#DDE8DF]/80 hover:bg-white/10 hover:text-white'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-[#F2F0EA] hover:bg-white/8 hover:text-white'
               }`}
             >
               <Icon
                 className={`h-4.5 w-4.5 shrink-0 transition-colors ${
-                  active ? 'text-white' : 'text-[#DDE8DF]/70 group-hover:text-white'
+                  active ? 'text-white' : 'text-[#D8D5CC] group-hover:text-white'
                 }`}
               />
               <span className="truncate">{displayLabel}</span>
@@ -375,14 +375,16 @@ function SidebarContent({
           onClick={onNavigate}
           className={`group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all ${
             pathname.startsWith('/app/notifications')
-              ? 'bg-[#7D9B8A] text-white shadow-xs'
-              : 'text-[#DDE8DF]/80 hover:bg-white/10 hover:text-white'
+              ? 'bg-primary text-white shadow-xs'
+              : 'text-[#F2F0EA] hover:bg-white/8 hover:text-white'
           }`}
         >
-          <Bell className="h-4.5 w-4.5 shrink-0 text-[#DDE8DF]/70 group-hover:text-white" />
+          <Bell className={`h-4.5 w-4.5 shrink-0 transition-colors ${
+            pathname.startsWith('/app/notifications') ? 'text-white' : 'text-[#D8D5CC] group-hover:text-white'
+          }`} />
           <span className="truncate">{language === 'vi' ? 'Thông báo' : 'Notifications'}</span>
           {unreadCount > 0 && (
-            <Badge className="ml-auto h-5 min-w-5 px-1.5 text-[10px] bg-[#7D9B8A] text-white border-0">
+            <Badge className="ml-auto h-5 min-w-5 px-1.5 text-[10px] bg-primary text-white border-0">
               {unreadCount}
             </Badge>
           )}
@@ -391,8 +393,8 @@ function SidebarContent({
         {/* Admin Navigation Section */}
         {isAdmin && (
           <>
-            <div className="my-3 border-t border-[#2d3d36]" />
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#DDE8DF]/50">
+            <div className="my-3 border-t border-sidebar-border" />
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-[#D8D5CC]/60">
               {t('Admin')}
             </p>
             <Link
@@ -400,8 +402,8 @@ function SidebarContent({
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
                 pathname === '/app/admin'
-                  ? 'bg-[#7D9B8A] text-white'
-                  : 'text-[#DDE8DF]/75 hover:bg-white/10 hover:text-white'
+                  ? 'bg-primary text-white'
+                  : 'text-[#F2F0EA] hover:bg-white/8 hover:text-white'
               }`}
             >
               <Shield className="h-4 w-4" />
@@ -412,8 +414,8 @@ function SidebarContent({
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
                 pathname === '/app/admin/verifications'
-                  ? 'bg-[#7D9B8A] text-white'
-                  : 'text-[#DDE8DF]/75 hover:bg-white/10 hover:text-white'
+                  ? 'bg-primary text-white'
+                  : 'text-[#F2F0EA] hover:bg-white/8 hover:text-white'
               }`}
             >
               <FileCheck className="h-4 w-4" />
@@ -424,8 +426,8 @@ function SidebarContent({
               onClick={onNavigate}
               className={`flex items-center gap-3 rounded-xl px-3.5 py-2 text-xs font-medium transition-all ${
                 pathname === '/app/admin/forum-moderation'
-                  ? 'bg-[#7D9B8A] text-white'
-                  : 'text-[#DDE8DF]/75 hover:bg-white/10 hover:text-white'
+                  ? 'bg-primary text-white'
+                  : 'text-[#F2F0EA] hover:bg-white/8 hover:text-white'
               }`}
             >
               <MessageSquare className="h-4 w-4" />
@@ -436,12 +438,12 @@ function SidebarContent({
       </nav>
 
       {/* Logout button at bottom */}
-      <div className="border-t border-[#2d3d36] p-3">
+      <div className="border-t border-sidebar-border p-3">
         <button
           onClick={onSignOut}
-          className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#DDE8DF]/80 hover:bg-red-500/15 hover:text-red-300 transition-colors"
+          className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-[#F2F0EA] hover:bg-red-500/15 hover:text-red-300 transition-colors"
         >
-          <LogOut className="h-4.5 w-4.5" />
+          <LogOut className="h-4.5 w-4.5 text-[#D8D5CC]" />
           <span>{language === 'vi' ? 'Đăng xuất' : 'Sign out'}</span>
         </button>
       </div>

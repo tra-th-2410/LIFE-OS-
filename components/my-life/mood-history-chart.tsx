@@ -43,15 +43,15 @@ export function MoodHistoryChart({ entries }: MoodHistoryChartProps) {
       : null;
 
   return (
-    <Card className="border-border/60 bg-card/60 backdrop-blur-sm shadow-sm">
-      <CardHeader className="pb-3 border-b border-border/40">
+    <Card className="border border-border bg-card shadow-xs">
+      <CardHeader className="pb-3 border-b border-border">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base sm:text-lg font-display flex items-center gap-2">
             <Activity className="h-5 w-5 text-primary" /> Diễn biến tâm trạng 7 ngày qua
           </CardTitle>
           {avgMood && (
-            <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20 gap-1 font-semibold">
-              <Sparkles className="h-3 w-3" /> Điểm TB: {avgMood}/5
+            <Badge variant="outline" className="text-xs bg-accent text-accent-foreground border-border gap-1 font-semibold">
+              <Sparkles className="h-3 w-3 text-primary" /> Điểm TB: {avgMood}/5
             </Badge>
           )}
         </div>
@@ -60,15 +60,15 @@ export function MoodHistoryChart({ entries }: MoodHistoryChartProps) {
       <CardContent className="p-5 space-y-6">
         {/* 7-Day Visual Mood Bar Chart */}
         <div className="space-y-2">
-          <div className="flex items-end justify-between gap-2 h-36 pt-4 px-2 bg-muted/20 rounded-2xl border border-border/40">
+          <div className="flex items-end justify-between gap-2 h-36 pt-4 px-2 bg-secondary/60 rounded-2xl border border-border">
             {dayData.map((d) => {
               const heightPercent = d.mood ? (d.mood / 5) * 100 : 8;
-              let barColor = 'bg-muted-foreground/15';
-              if (d.mood === 5) barColor = 'bg-emerald-500 shadow-sm shadow-emerald-500/20';
-              else if (d.mood === 4) barColor = 'bg-blue-500 shadow-sm shadow-blue-500/20';
-              else if (d.mood === 3) barColor = 'bg-amber-500 shadow-sm shadow-amber-500/20';
-              else if (d.mood === 2) barColor = 'bg-orange-500 shadow-sm shadow-orange-500/20';
-              else if (d.mood === 1) barColor = 'bg-rose-500 shadow-sm shadow-rose-500/20';
+              let barColor = 'bg-muted';
+              if (d.mood === 5) barColor = 'bg-primary';
+              else if (d.mood === 4) barColor = 'bg-primary/80';
+              else if (d.mood === 3) barColor = 'bg-primary/60';
+              else if (d.mood === 2) barColor = 'bg-primary/40';
+              else if (d.mood === 1) barColor = 'bg-muted-foreground/40';
 
               return (
                 <div key={d.dateStr} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">

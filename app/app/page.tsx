@@ -350,7 +350,7 @@ export default function AppHomePage() {
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* Header */}
           <div className="space-y-1.5">
-            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground dark:text-[#F5F5F2]">
+            <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">
               {language === 'vi'
                 ? 'Chào mừng bạn đến với Life OS 👋'
                 : 'Welcome to Life OS 👋'}
@@ -364,9 +364,9 @@ export default function AppHomePage() {
 
           {/* Hero Panel */}
           <div className="relative overflow-hidden rounded-2xl border border-border bg-card p-7 sm:p-10 shadow-xs">
-            {/* Subtle organic sage decorative shape */}
-            <div className="absolute right-0 top-0 -mt-12 -mr-12 h-64 w-64 rounded-full bg-[#DDE8DF]/40 dark:bg-[#7D9B8A]/15 blur-2xl pointer-events-none" />
-            <div className="absolute right-24 bottom-0 -mb-8 h-40 w-40 rounded-full bg-[#7D9B8A]/10 blur-xl pointer-events-none" />
+            {/* Subtle organic decorative shape */}
+            <div className="absolute right-0 top-0 -mt-12 -mr-12 h-64 w-64 rounded-full bg-accent/40 dark:bg-primary/10 blur-2xl pointer-events-none" />
+            <div className="absolute right-24 bottom-0 -mb-8 h-40 w-40 rounded-full bg-primary/10 blur-xl pointer-events-none" />
 
             <div className="relative z-10 max-w-xl space-y-4">
               <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-accent text-accent-foreground text-2xl shadow-2xs">
@@ -384,7 +384,7 @@ export default function AppHomePage() {
               </div>
               <div className="pt-2">
                 <Link href="/app/calendar">
-                  <Button className="bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white px-6 py-2.5 rounded-xl font-medium shadow-xs gap-2">
+                  <Button className="px-6 py-2.5 rounded-xl font-medium shadow-xs gap-2">
                     {language === 'vi' ? 'Bắt đầu →' : 'Get Started →'}
                   </Button>
                 </Link>
@@ -499,7 +499,7 @@ export default function AppHomePage() {
           {/* Active User Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1">
-              <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground dark:text-[#F5F5F2]">
+              <h1 className="text-2xl sm:text-3xl font-display font-bold text-foreground">
                 {greetingText}
               </h1>
               <p className="text-sm text-muted-foreground">
@@ -570,7 +570,7 @@ export default function AppHomePage() {
                   </div>
                   <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                     <div
-                      className="h-full bg-[#7D9B8A] rounded-full transition-all duration-300"
+                      className="h-full bg-primary rounded-full transition-all duration-300"
                       style={{ width: primaryTask.status === 'completed' ? '100%' : '80%' }}
                     />
                   </div>
@@ -579,7 +579,7 @@ export default function AppHomePage() {
                 <div className="flex items-center gap-3 pt-2">
                   <Button
                     onClick={() => handleToggleTask(primaryTask)}
-                    className="bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white rounded-xl text-sm font-medium px-5 gap-2"
+                    className="rounded-xl text-sm font-medium px-5 gap-2"
                   >
                     {primaryTask.status === 'completed' ? (
                       <>
@@ -619,7 +619,7 @@ export default function AppHomePage() {
                   </p>
                 </div>
                 <Link href="/app/calendar">
-                  <Button className="bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white text-xs sm:text-sm rounded-xl mt-2">
+                  <Button className="text-xs sm:text-sm rounded-xl mt-2">
                     {language === 'vi' ? 'Tạo nhiệm vụ →' : 'Create Task →'}
                   </Button>
                 </Link>
@@ -784,10 +784,11 @@ export default function AppHomePage() {
                             {day.minutes > 0 ? `${day.minutes}m` : '0'}
                           </div>
                           <div
-                            className="w-full max-w-[28px] rounded-t-md transition-all duration-300 group-hover:brightness-95 bg-border dark:bg-muted"
+                            className={`w-full max-w-[28px] rounded-t-md transition-all duration-300 group-hover:brightness-95 ${
+                              day.minutes > 0 ? 'bg-primary' : 'bg-border dark:bg-muted'
+                            }`}
                             style={{
                               height: `${heightPercent}%`,
-                              backgroundColor: day.minutes > 0 ? '#7D9B8A' : undefined,
                             }}
                           />
                         </div>
@@ -852,7 +853,7 @@ export default function AppHomePage() {
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
                         <div
-                          className="h-full bg-[#7D9B8A] rounded-full transition-all"
+                          className="h-full bg-primary rounded-full transition-all"
                           style={{ width: `${activeChallenge.progress || 0}%` }}
                         />
                       </div>
@@ -909,7 +910,8 @@ export default function AppHomePage() {
                 <Link href="/app/ai" className="block pt-1">
                   <Button
                     size="sm"
-                    className="w-full bg-[#7D9B8A] hover:bg-[#6e8a7a] text-white rounded-xl text-xs font-medium"
+                    variant="ai"
+                    className="w-full rounded-xl text-xs font-medium"
                   >
                     {language === 'vi' ? 'Hỏi AI →' : 'Ask AI →'}
                   </Button>

@@ -484,10 +484,10 @@ export default function SmartCalendarPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             onClick={() => setShowAiPromptModal(true)}
-            variant="outline"
-            className="gap-1.5 rounded-xl border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary font-medium"
+            variant="ai"
+            className="gap-1.5 rounded-xl font-medium"
           >
-            <Bot className="h-4 w-4 text-primary" /> AI Xếp Lịch
+            <Bot className="h-4 w-4" /> AI Xếp Lịch
           </Button>
 
           <Button
@@ -547,7 +547,7 @@ export default function SmartCalendarPage() {
       )}
 
       {/* Calendar Navigation & Mode Switcher Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card/60 p-3 rounded-2xl border border-border/60 backdrop-blur-sm">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-card p-3 rounded-2xl border border-border shadow-2xs">
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleToday} className="rounded-xl text-xs font-medium">
             {t('Hôm nay')}

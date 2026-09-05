@@ -114,48 +114,48 @@ export function StudyProgressView() {
       {/* Top 4 Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1 */}
-        <Card className="border-border/60 bg-card/80 p-4 space-y-1.5 shadow-xs">
+        <Card className="border border-border bg-card p-4 space-y-1.5 shadow-2xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Thời gian học tập</span>
-            <Clock className="h-4 w-4 text-blue-500" />
+            <Clock className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold font-display text-blue-600 dark:text-blue-400">{studyHours} giờ</p>
-          <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
-            <ArrowUpRight className="h-3.5 w-3.5" /> +15% so với tuần trước
+          <p className="text-2xl font-bold font-display text-foreground">{studyHours} giờ</p>
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+            <ArrowUpRight className="h-3.5 w-3.5 text-primary" /> +15% so với tuần trước
           </div>
         </Card>
 
         {/* Metric 2 */}
-        <Card className="border-border/60 bg-card/80 p-4 space-y-1.5 shadow-xs">
+        <Card className="border border-border bg-card p-4 space-y-1.5 shadow-2xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Số câu đã giải</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            <CheckCircle2 className="h-4 w-4 text-primary" />
           </div>
           <p className="text-2xl font-bold font-display text-foreground">{totalQuestions} câu</p>
-          <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
-            <ArrowUpRight className="h-3.5 w-3.5" /> +24 câu tuần này
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+            <ArrowUpRight className="h-3.5 w-3.5 text-primary" /> +24 câu tuần này
           </div>
         </Card>
 
         {/* Metric 3 */}
-        <Card className="border-border/60 bg-card/80 p-4 space-y-1.5 shadow-xs">
+        <Card className="border border-border bg-card p-4 space-y-1.5 shadow-2xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Độ chính xác trung bình</span>
-            <TrendingUp className="h-4 w-4 text-purple-500" />
+            <TrendingUp className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold font-display text-purple-600 dark:text-purple-400">{accuracy}%</p>
-          <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium">
-            <ArrowUpRight className="h-3.5 w-3.5" /> +4% tiến bộ
+          <p className="text-2xl font-bold font-display text-foreground">{accuracy}%</p>
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+            <ArrowUpRight className="h-3.5 w-3.5 text-primary" /> +4% tiến bộ
           </div>
         </Card>
 
         {/* Metric 4 */}
-        <Card className="border-border/60 bg-card/80 p-4 space-y-1.5 shadow-xs">
+        <Card className="border border-border bg-card p-4 space-y-1.5 shadow-2xs">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="font-semibold uppercase tracking-wider text-[10px]">Chuỗi ngày học liên tục</span>
-            <Flame className="h-4 w-4 text-orange-500" />
+            <Flame className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-2xl font-bold font-display text-orange-500">{streak} ngày</p>
+          <p className="text-2xl font-bold font-display text-primary">{streak} ngày</p>
           <p className="text-[11px] text-muted-foreground">Giữ vững phong độ!</p>
         </Card>
       </div>
