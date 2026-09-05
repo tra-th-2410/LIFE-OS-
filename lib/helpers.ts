@@ -138,26 +138,77 @@ export function calculateHabitStreak(completedDates: string[]): number {
 }
 
 /**
+ * Known legacy / deprecated domains that must NEVER be redirected to.
+ */
+export const LEGACY_DISALLOWED_DOMAINS = [
+  'bejewelled-froyo-d5b8de.netlify.app',
+  'life-os-study.netlify.app',
+];
+
+/**
+ * Primary production site URL for Life OS.
+ */
+export const PRODUCTION_SITE_URL = 'https://life-os-study.vercel.app';
+
+/**
+ * Helper to check whether a given domain/URL is allowed.
+ * Prevents redirecting to legacy domains or localhost in production.
+ */
+export function isAllowedHost(
+  hostOrUrl?: string | null,
+  isProduction: boolean = process.env.NODE_ENV === 'production'
+): boolean {
+  if (!hostOrUrl || typeof hostOrUrl !== 'string') return false;
+  const clean = hostOrUrl.trim().toLowerCase();
+
+  // Block any legacy domain
+  for (const legacy of LEGACY_DISALLOWED_DOMAINS) {
+    if (clean.includes(legacy)) return false;
+  }
+
+  // Block localhost and internal loopback addresses in production
+  if (isProduction && (clean.includes('localhost') || clean.includes('127.0.0.1') || clean.includes('0.0.0.0'))) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Resolves the primary site URL dynamically and safely for both
  * local development (localhost) and production (Netlify / custom domain).
+ * Guarantees that legacy domains and localhost (in production) are NEVER returned.
  */
 export function getSiteUrl(): string {
-  // 1. Client-side browser resolution (dynamically adapts to localhost or current production/preview domain)
+  const isProd = process.env.NODE_ENV === 'production';
+
+  // 1. Client-side browser resolution (dynamically adapts to current production/preview domain)
   if (typeof window !== 'undefined' && window.location?.origin) {
-    const origin = window.location.origin;
-    if (origin && origin !== 'null' && origin !== 'about:blank') {
-      return origin.replace(/\/+$/, '');
+    const origin = window.location.origin.trim().replace(/\/+$/, '');
+    if (origin && origin !== 'null' && origin !== 'about:blank' && isAllowedHost(origin, isProd)) {
+      return origin;
     }
   }
 
-  // 2. Explicit env configuration (e.g. from NEXT_PUBLIC_SITE_URL or NEXT_PUBLIC_URL)
-  const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL;
+  // 2. Explicit env configuration (e.g. from NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_URL, or SITE_URL)
+  const envUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_URL || process.env.SITE_URL;
   if (envUrl && envUrl.trim()) {
-    return envUrl.trim().replace(/\/+$/, '');
+    const trimmedEnv = envUrl.trim().replace(/\/+$/, '');
+    if (isAllowedHost(trimmedEnv, isProd)) {
+      return trimmedEnv;
+    }
   }
 
-  // 3. Production fallback (Netlify URL)
-  return 'https://life-os-study.netlify.app';
+  // 3. Vercel deployment URL support (e.g. *.vercel.app)
+  if (process.env.VERCEL_URL && process.env.VERCEL_URL.trim()) {
+    const vercelHost = process.env.VERCEL_URL.trim().replace(/\/+$/, '');
+    if (isAllowedHost(vercelHost, isProd)) {
+      return `https://${vercelHost}`;
+    }
+  }
+
+  // 4. Guaranteed production fallback (Netlify URL)
+  return PRODUCTION_SITE_URL;
 }
 
 /**

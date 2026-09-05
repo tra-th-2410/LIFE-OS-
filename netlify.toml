@@ -4,7 +4,7 @@ publish = ".next"
 
 [build.environment]
 NODE_VERSION = "20"
-NEXT_PUBLIC_SITE_URL = "https://life-os-study.netlify.app"
+NEXT_PUBLIC_SITE_URL = "https://life-os-study.vercel.app"
 
 [functions]
 directory = "netlify/functions"

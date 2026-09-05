@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -70,6 +71,22 @@ const stats = [
 ];
 
 export default function LandingPage() {
+  // Catch any auth callback, confirmation tokens, or verification errors arriving at root
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      if (hash && (hash.includes('access_token') || hash.includes('error') || hash.includes('type='))) {
+        window.location.replace(`/auth/confirm${search}${hash}`);
+        return;
+      }
+      if (search && (search.includes('code=') || search.includes('error=') || search.includes('token_hash='))) {
+        window.location.replace(`/auth/callback${search}`);
+        return;
+      }
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Nav */}
