@@ -98,6 +98,68 @@ export const AI_BOTS: Record<BotType, BotConfig> = {
   },
 };
 
+function cleanStudyCoachText(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // Pattern 0: If there are multiple greetings (e.g. quoted draft followed by final), take from the LAST greeting
+  const greetingKeywords = ['Hi there!', 'Hello!', 'Chào bạn!', 'Xin chào!', 'Chào bạn,', 'Xin chào,', 'Chào bạn'];
+  let lastGreetingIdx = -1;
+  for (const kw of greetingKeywords) {
+    const idx = text.lastIndexOf(kw);
+    if (idx > lastGreetingIdx) {
+      lastGreetingIdx = idx;
+    }
+  }
+  if (lastGreetingIdx > 40) {
+    const candidate = text.slice(lastGreetingIdx).trim();
+    if (candidate.length > 30) {
+      text = candidate;
+    }
+  }
+
+  // Pattern 0b: Self-Correction marker like *Self-Correction:* or (Self-correction: ...)
+  const selfCorrectionMatch = text.match(/(?:\*Self-Correction:\*|\(Self-correction:[^\)]*\))\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/i);
+  if (selfCorrectionMatch && selfCorrectionMatch[1] && selfCorrectionMatch[1].trim().length > 20) {
+    text = selfCorrectionMatch[1].trim();
+  }
+
+  // Pattern 1: Gemini checklist ending with (Yes|Correct|Check|Passed) followed immediately by response text
+  const inlineYesMatch = text.match(/\*\s*[^\n\?]+\?\s*(?:Yes|Correct|Check|Passed)\.?\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/);
+  if (inlineYesMatch && inlineYesMatch[1] && inlineYesMatch[1].trim().length > 20) {
+    text = inlineYesMatch[1].trim();
+  }
+
+  // Pattern 2: Duplicated draft in quotes followed by unquoted final text
+  const quotedDraftMatch = text.match(/^"[\s\S]*?"\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/);
+  if (quotedDraftMatch && quotedDraftMatch[1] && quotedDraftMatch[1].trim().length > 30) {
+    text = quotedDraftMatch[1].trim();
+  }
+
+  // Pattern 3: If the text still has leading bullet points of reasoning, strip them
+  const lines = text.split('\n');
+  let startIdx = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l) continue;
+    if (/^(\*|-|\d+\.)\s*(User\s|Context|Language|Tone|Role|Goal|Constraint|Analysis|Plan|Urgency|Recommendation|Structure|Multilingual|Greeting|Schedule|Encouragement|Option|Checklist|Step|Closing|\*Greeting|\*Analysis|\*Recommendation)/i.test(l)) {
+      startIdx = i + 1;
+      continue;
+    }
+    if (/^\s{2,}(\*|-|\d+\.)\s/i.test(lines[i])) {
+      startIdx = i + 1;
+      continue;
+    }
+    break;
+  }
+
+  if (startIdx > 0 && startIdx < lines.length) {
+    text = lines.slice(startIdx).join('\n').trim();
+  }
+
+  return text;
+}
+
 export async function generateAiResponse(
   botType: BotType,
   messages: { role: string; content: string }[],
@@ -106,16 +168,22 @@ export async function generateAiResponse(
 ): Promise<string> {
   // Strategy 1: Call internal Next.js API Route (/api/ai/chat)
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
     const localRes = await fetch('/api/ai/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ botType, messages, studentContext }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (localRes.ok) {
       const data = await localRes.json();
       if (data?.content && typeof data.content === 'string') {
-        return data.content.trim();
+        return cleanStudyCoachText(data.content.trim());
       }
     }
   } catch {
@@ -139,11 +207,26 @@ export async function generateAiResponse(
     headers['Authorization'] = `Bearer ${supabaseAnonKey}`;
   }
 
-  const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+  let response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ botType, messages }),
+    body: JSON.stringify({ botType, messages, studentContext }),
   });
+
+  // Smart fallback if study_coach returned 400 on older edge function deployment
+  if (!response.ok && botType === 'study_coach') {
+    response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        botType: 'learning',
+        messages: [
+          { role: 'user', content: '[SYSTEM INSTRUCTION: You are Study Coach AI, the learning assistant of Life OS. Answer directly in Vietnamese.]' },
+          ...messages,
+        ],
+      }),
+    });
+  }
 
   const rawText = await response.text();
 
@@ -188,7 +271,7 @@ export async function generateAiResponse(
     content = (data as Record<string, unknown>).text as string;
   }
 
-  content = content.trim();
+  content = cleanStudyCoachText(content.trim());
 
   if (!content || content === 'undefined' || content === 'null') {
     throw new Error('AI service returned an empty or invalid response');

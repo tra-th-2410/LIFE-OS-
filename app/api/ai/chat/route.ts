@@ -13,10 +13,74 @@ interface RequestBody {
     weaknessTopics?: { subject: string; topic: string; mastery_score: number }[];
     upcomingEvents?: { title: string; date: string; start_time: string }[];
     gamification?: { level: number; xp: number; streak_days: number; total_study_minutes: number };
+    studyHistory?: { subject?: string; study_type?: string; duration_seconds?: number; correct_count?: number; started_at?: string }[];
+    studyProgress?: { totalSessions?: number; totalMinutes?: number };
     recentActivity?: string;
   };
   mindcareMemories?: { key_point: string; category?: string }[];
   conversationState?: string;
+}
+
+function cleanStudyCoachResponse(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // Pattern 0: If there are multiple greetings (e.g. quoted draft followed by final), take from the LAST greeting
+  const greetingKeywords = ['Hi there!', 'Hello!', 'Chào bạn!', 'Xin chào!', 'Chào bạn,', 'Xin chào,', 'Chào bạn'];
+  let lastGreetingIdx = -1;
+  for (const kw of greetingKeywords) {
+    const idx = text.lastIndexOf(kw);
+    if (idx > lastGreetingIdx) {
+      lastGreetingIdx = idx;
+    }
+  }
+  if (lastGreetingIdx > 40) {
+    const candidate = text.slice(lastGreetingIdx).trim();
+    if (candidate.length > 30) {
+      text = candidate;
+    }
+  }
+
+  // Pattern 0b: Self-Correction marker like *Self-Correction:* or (Self-correction: ...)
+  const selfCorrectionMatch = text.match(/(?:\*Self-Correction:\*|\(Self-correction:[^\)]*\))\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/i);
+  if (selfCorrectionMatch && selfCorrectionMatch[1] && selfCorrectionMatch[1].trim().length > 20) {
+    text = selfCorrectionMatch[1].trim();
+  }
+
+  // Pattern 1: Gemini checklist ending with (Yes|Correct|Check|Passed) followed immediately by response text
+  const inlineYesMatch = text.match(/\*\s*[^\n\?]+\?\s*(?:Yes|Correct|Check|Passed)\.?\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/);
+  if (inlineYesMatch && inlineYesMatch[1] && inlineYesMatch[1].trim().length > 20) {
+    text = inlineYesMatch[1].trim();
+  }
+
+  // Pattern 2: Duplicated draft in quotes followed by unquoted final text
+  const quotedDraftMatch = text.match(/^"[\s\S]*?"\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/);
+  if (quotedDraftMatch && quotedDraftMatch[1] && quotedDraftMatch[1].trim().length > 30) {
+    text = quotedDraftMatch[1].trim();
+  }
+
+  // Pattern 3: If the text still has leading bullet points of reasoning, strip them
+  const lines = text.split('\n');
+  let startIdx = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l) continue;
+    if (/^(\*|-|\d+\.)\s*(User\s|Context|Language|Tone|Role|Goal|Constraint|Analysis|Plan|Urgency|Recommendation|Structure|Multilingual|Greeting|Schedule|Encouragement|Option|Checklist|Step|Closing|\*Greeting|\*Analysis|\*Recommendation)/i.test(l)) {
+      startIdx = i + 1;
+      continue;
+    }
+    if (/^\s{2,}(\*|-|\d+\.)\s/i.test(lines[i])) {
+      startIdx = i + 1;
+      continue;
+    }
+    break;
+  }
+
+  if (startIdx > 0 && startIdx < lines.length) {
+    text = lines.slice(startIdx).join('\n').trim();
+  }
+
+  return text;
 }
 
 const MULTILINGUAL_BASE = `You understand Vietnamese, English, and mixed Vietnamese-English naturally. Respond in the language the user is using unless they explicitly request another language. Vietnamese is fully supported; never ask the user to translate. When explaining technical terms in Vietnamese, include the English term in parentheses when useful.`;
@@ -73,7 +137,7 @@ QUY TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
   study_coach: (context) => {
     let contextStr = '';
     if (context) {
-      const { weaknessTopics, upcomingEvents, gamification } = context;
+      const { weaknessTopics, upcomingEvents, gamification, studyHistory, studyProgress } = context;
       contextStr = `\n\n--- REAL STUDENT LEARNING DATA IN LIFE OS ---\n`;
       if (weaknessTopics && weaknessTopics.length > 0) {
         contextStr += `• Weakness Map Topics (<70% mastery):\n` +
@@ -92,6 +156,15 @@ QUY TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
       if (gamification) {
         contextStr += `• Gamification Stats: Level ${gamification.level} (${gamification.xp} XP), Streak: ${gamification.streak_days} days, Total Study Time: ${gamification.total_study_minutes} mins.\n`;
       }
+
+      if (studyHistory && studyHistory.length > 0) {
+        contextStr += `• Recent Study History:\n` +
+          studyHistory.map((s) => `  - ${s.subject || 'Học tập'} (${s.study_type || 'session'}): ${s.correct_count ? s.correct_count + ' câu đúng' : ''} lúc ${s.started_at ? s.started_at.slice(0, 10) : ''}`).join('\n') + '\n';
+      }
+
+      if (studyProgress) {
+        contextStr += `• Study Progress: ${studyProgress.totalSessions ?? 0} sessions completed, ~${studyProgress.totalMinutes ?? 0} mins studied.\n`;
+      }
       contextStr += `--------------------------------------------\n`;
     }
 
@@ -105,11 +178,12 @@ Key Objectives & Behavior:
 2. Identify weak topics and suggest focused review sessions (recommended 30-45 minutes).
 3. Recommend concrete study schedules and propose calendar study sessions.
 4. Explain WHY you are making each recommendation (e.g., "Because your mastery in Trigonometry is at 45%...").
-5. If the student has no weak topics or no data yet, explain gracefully that they should complete a few quizzes first. NEVER invent fake quiz scores or fake progress.
+5. If the student has no weak topics or no data yet, explain gracefully and welcome them to Life OS, suggesting they can start learning their favorite subject or take a quiz in Study Library. NEVER invent fake quiz scores or fake progress.
 6. When proposing a calendar session, include a clear structured suggestion like:
 [SCHEDULE_PROPOSAL: {"subject": "Toán học", "topic": "Định lý Pythagore", "durationMinutes": 45, "time": "19:30"}]
 The UI will automatically recognize this and let the student add it to Smart Calendar with one click.
-7. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.${contextStr}`;
+7. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.
+8. CRITICAL: Output ONLY the final response to the student. Do NOT output internal reasoning, thinking steps, checklist analysis, or draft options.${contextStr}`;
   },
 
   learning: () => `${MULTILINGUAL_BASE}
@@ -199,7 +273,7 @@ export async function POST(req: NextRequest) {
             apikey: supabaseAnonKey,
             Authorization: `Bearer ${supabaseAnonKey}`,
           },
-          body: JSON.stringify({ botType, messages, mindcareMemories }),
+          body: JSON.stringify({ botType, messages, studentContext, mindcareMemories }),
         });
 
         // Smart proxy for MindCare: if remote edge function hasn't deployed 'mindcare' yet and returned 400,
@@ -222,6 +296,26 @@ export async function POST(req: NextRequest) {
           });
         }
 
+        // Smart proxy for Study Coach: if remote edge function returned error,
+        // invoke via accepted botType 'learning' with the wrapped Study Coach system instruction!
+        if (!edgeRes.ok && botType === 'study_coach') {
+          edgeRes = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              botType: 'learning',
+              messages: [
+                { role: 'user', content: `[SYSTEM INSTRUCTION: ${systemPrompt}]\n\nHọc sinh đang trò chuyện với bạn. Hãy đóng vai trò là Study Coach AI của Life OS và trả lời tin nhắn của học sinh:` },
+                ...messages,
+              ],
+            }),
+          });
+        }
+
         if (edgeRes.ok) {
           const edgeData = await edgeRes.json();
           let rawContent = '';
@@ -229,7 +323,12 @@ export async function POST(req: NextRequest) {
           else if (typeof edgeData?.content === 'string') rawContent = edgeData.content;
           else if (typeof edgeData?.message === 'string') rawContent = edgeData.message;
 
-          const cleaned = botType === 'mindcare' ? cleanAiResponse(rawContent) : rawContent;
+          let cleaned = rawContent;
+          if (botType === 'mindcare') {
+            cleaned = cleanAiResponse(rawContent);
+          } else if (botType === 'study_coach') {
+            cleaned = cleanStudyCoachResponse(rawContent);
+          }
           return NextResponse.json({ content: cleaned });
         }
       }
@@ -254,9 +353,9 @@ export async function POST(req: NextRequest) {
     }
 
     const modelsToTry = [
+      'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
-      'gemini-1.5-flash-latest',
       'gemini-1.5-pro',
     ];
 
@@ -265,10 +364,14 @@ export async function POST(req: NextRequest) {
 
     for (const model of modelsToTry) {
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000);
+
         const nativeUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
         const nativeRes = await fetch(nativeUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
           body: JSON.stringify({
             contents,
             systemInstruction: {
@@ -281,6 +384,8 @@ export async function POST(req: NextRequest) {
           }),
         });
 
+        clearTimeout(timeoutId);
+
         if (nativeRes.ok) {
           const nativeData = await nativeRes.json();
           const partText =
@@ -289,7 +394,13 @@ export async function POST(req: NextRequest) {
               .join('') || '';
 
           if (partText.trim()) {
-            content = botType === 'mindcare' ? cleanAiResponse(partText.trim()) : partText.trim();
+            if (botType === 'mindcare') {
+              content = cleanAiResponse(partText.trim());
+            } else if (botType === 'study_coach') {
+              content = cleanStudyCoachResponse(partText.trim());
+            } else {
+              content = partText.trim();
+            }
             break;
           }
         } else {

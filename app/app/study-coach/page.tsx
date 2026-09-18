@@ -58,11 +58,22 @@ export default function StudyCoachPage() {
   const [weaknessTopics, setWeaknessTopics] = useState<StudyWeaknessTopic[]>([]);
   const [gamification, setGamification] = useState<UserGamification | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<SmartCalendarEvent[]>([]);
+  const [studyHistory, setStudyHistory] = useState<{
+    subject?: string;
+    study_type?: string;
+    duration_seconds?: number;
+    correct_count?: number;
+    started_at?: string;
+  }[]>([]);
+  const [studyProgress, setStudyProgress] = useState<{
+    totalSessions?: number;
+    totalMinutes?: number;
+  }>({ totalSessions: 0, totalMinutes: 0 });
   const [loadingContext, setLoadingContext] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load complete student learning context from database
+  // Load complete student learning context from database safely
   const loadContext = useCallback(async () => {
     if (!user) return;
     setLoadingContext(true);
@@ -72,7 +83,7 @@ export default function StudyCoachPage() {
       futureDate.setDate(futureDate.getDate() + 7);
       const futureDateStr = futureDate.toISOString().split('T')[0];
 
-      const [weakList, gameRes, evsRes] = await Promise.all([
+      const [weakListRes, gameRes, evsRes, sessRes] = await Promise.allSettled([
         getWeaknessMapForUser(user.id),
         supabase.from('user_gamification').select('*').eq('user_id', user.id).maybeSingle(),
         supabase
@@ -83,11 +94,27 @@ export default function StudyCoachPage() {
           .lte('date', futureDateStr)
           .order('date', { ascending: true })
           .limit(5),
+        supabase
+          .from('study_sessions')
+          .select('study_type, duration_seconds, correct_count, started_at')
+          .eq('user_id', user.id)
+          .order('started_at', { ascending: false })
+          .limit(5),
       ]);
 
+      const weakList = weakListRes.status === 'fulfilled' ? (weakListRes.value || []) : [];
+      const gameData = gameRes.status === 'fulfilled' ? (gameRes.value?.data as UserGamification | null) : null;
+      const evsData = evsRes.status === 'fulfilled' ? ((evsRes.value?.data as SmartCalendarEvent[]) || []) : [];
+      const sessData = sessRes.status === 'fulfilled' ? ((sessRes.value?.data as any[]) || []) : [];
+
       setWeaknessTopics(weakList);
-      setGamification((gameRes.data as UserGamification) ?? null);
-      setUpcomingEvents((evsRes.data as SmartCalendarEvent[]) ?? []);
+      setGamification(gameData ?? null);
+      setUpcomingEvents(evsData);
+      setStudyHistory(sessData);
+
+      const totalSess = sessData.length;
+      const totalMins = Math.round(sessData.reduce((acc, s) => acc + (s.duration_seconds || 0), 0) / 60);
+      setStudyProgress({ totalSessions: totalSess, totalMinutes: totalMins });
 
       // Initial AI greeting personalized with real student context
       const weak = weakList.filter((w) => w.mastery_score < 70);
@@ -167,7 +194,7 @@ export default function StudyCoachPage() {
     setIsAiTyping(true);
 
     try {
-      // Build student context payload
+      // Build student context payload with all 5 Life OS pillars
       const studentContext = {
         weaknessTopics: weaknessTopics.map((w) => ({
           subject: w.subject,
@@ -187,6 +214,14 @@ export default function StudyCoachPage() {
               total_study_minutes: gamification.total_study_minutes,
             }
           : undefined,
+        studyHistory: studyHistory.map((s) => ({
+          subject: s.subject,
+          study_type: s.study_type,
+          duration_seconds: s.duration_seconds,
+          correct_count: s.correct_count,
+          started_at: s.started_at,
+        })),
+        studyProgress,
       };
 
       const session = await supabase.auth.getSession();
@@ -236,15 +271,21 @@ export default function StudyCoachPage() {
       ]);
     } catch (err: any) {
       console.error('Error generating AI response:', err);
+      const errDetail = String(err?.message || '');
+      let errorDisplay = 'Xin lỗi, hiện tại kết nối đến AI đang gặp sự cố. Bạn vui lòng bấm thử lại hoặc chọn một trong các gợi ý bên dưới.';
+      if (errDetail.includes('429') || errDetail.toLowerCase().includes('quá tải')) {
+        errorDisplay = 'Dịch vụ AI đang nhận nhiều yêu cầu cùng lúc. Bạn vui lòng đợi 15-30 giây rồi thử lại nhé!';
+      }
       setMessages((prev) => [
         ...prev,
         {
           id: `msg-ai-${Date.now()}`,
           role: 'assistant',
-          content: 'Xin lỗi, hiện tại kết nối đến AI đang gặp sự cố. Bạn vui lòng thử lại sau ít phút hoặc chọn một trong các gợi ý bên dưới.',
+          content: errorDisplay,
           timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
+      toast.error('Không thể hoàn tất trả lời từ AI, vui lòng thử lại.');
     } finally {
       setIsAiTyping(false);
     }

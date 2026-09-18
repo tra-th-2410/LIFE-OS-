@@ -15,6 +15,129 @@ interface RequestBody {
   botType: string;
   messages: { role: string; content: string }[];
   mindcareMemories?: { key_point: string; category?: string }[];
+  studentContext?: {
+    weaknessTopics?: { subject: string; topic: string; mastery_score: number }[];
+    upcomingEvents?: { title: string; date: string; start_time: string }[];
+    gamification?: { level: number; xp: number; streak_days: number; total_study_minutes: number };
+    studyHistory?: { subject?: string; study_type?: string; duration_seconds?: number; correct_count?: number; started_at?: string }[];
+    studyProgress?: { totalSessions?: number; totalMinutes?: number };
+    recentActivity?: string;
+  };
+}
+
+function cleanReasoningOutput(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let text = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+
+  // Pattern 0: If there are multiple greetings (e.g. quoted draft followed by final), take from the LAST greeting
+  const greetingKeywords = ['Hi there!', 'Hello!', 'Chào bạn!', 'Xin chào!', 'Chào bạn,', 'Xin chào,', 'Chào bạn'];
+  let lastGreetingIdx = -1;
+  for (const kw of greetingKeywords) {
+    const idx = text.lastIndexOf(kw);
+    if (idx > lastGreetingIdx) {
+      lastGreetingIdx = idx;
+    }
+  }
+  if (lastGreetingIdx > 40) {
+    const candidate = text.slice(lastGreetingIdx).trim();
+    if (candidate.length > 30) {
+      text = candidate;
+    }
+  }
+
+  // Pattern 0b: Self-Correction marker like *Self-Correction:* or (Self-correction: ...)
+  const selfCorrectionMatch = text.match(/(?:\*Self-Correction:\*|\(Self-correction:[^\)]*\))\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/i);
+  if (selfCorrectionMatch && selfCorrectionMatch[1] && selfCorrectionMatch[1].trim().length > 20) {
+    text = selfCorrectionMatch[1].trim();
+  }
+
+  // Pattern 1: Gemini checklist ending with (Yes|Correct|Check|Passed) followed immediately by response text
+  const inlineYesMatch = text.match(/\*\s*[^\n\?]+\?\s*(?:Yes|Correct|Check|Passed)\.?\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/);
+  if (inlineYesMatch && inlineYesMatch[1] && inlineYesMatch[1].trim().length > 20) {
+    text = inlineYesMatch[1].trim();
+  }
+
+  // Pattern 2: Duplicated draft in quotes followed by unquoted final text
+  const quotedDraftMatch = text.match(/^"[\s\S]*?"\s*([A-ZÀ-Ỹa-zà-ỹ][\s\S]*)$/);
+  if (quotedDraftMatch && quotedDraftMatch[1] && quotedDraftMatch[1].trim().length > 30) {
+    text = quotedDraftMatch[1].trim();
+  }
+
+  // Pattern 3: If the text still has leading bullet points of reasoning, strip them
+  const lines = text.split('\n');
+  let startIdx = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+    if (!l) continue;
+    if (/^(\*|-)\s*(User\s|Context|Language|Tone|Role|Goal|Constraint|Analysis|Plan|Urgency|Recommendation|Structure|Multilingual|Greeting|Schedule|Encouragement|Option|Checklist|Step|\*Greeting|\*Analysis|\*Recommendation)/i.test(l)) {
+      startIdx = i + 1;
+      continue;
+    }
+    if (/^\s{2,}\*\s/i.test(lines[i])) {
+      startIdx = i + 1;
+      continue;
+    }
+    break;
+  }
+
+  if (startIdx > 0 && startIdx < lines.length) {
+    text = lines.slice(startIdx).join('\n').trim();
+  }
+
+  return text;
+}
+
+function formatStudyCoachPrompt(context?: RequestBody['studentContext']): string {
+  let contextStr = '';
+  if (context) {
+    const { weaknessTopics, upcomingEvents, gamification, studyHistory, studyProgress } = context;
+    contextStr = `\n\n--- REAL STUDENT LEARNING DATA IN LIFE OS ---\n`;
+    if (weaknessTopics && weaknessTopics.length > 0) {
+      contextStr += `• Weakness Map Topics (<70% mastery):\n` +
+        weaknessTopics.map((w) => `  - ${w.subject}: ${w.topic} (${w.mastery_score}%)`).join('\n') + '\n';
+    } else {
+      contextStr += `• Weakness Map: No weak topics recorded yet (or student hasn't completed enough quizzes).\n`;
+    }
+
+    if (upcomingEvents && upcomingEvents.length > 0) {
+      contextStr += `• Upcoming Smart Calendar Events (Next 7 days):\n` +
+        upcomingEvents.map((e) => `  - ${e.date} (${e.start_time}): ${e.title}`).join('\n') + '\n';
+    } else {
+      contextStr += `• Upcoming Smart Calendar Events: No upcoming study sessions scheduled.\n`;
+    }
+
+    if (gamification) {
+      contextStr += `• Gamification Stats: Level ${gamification.level} (${gamification.xp} XP), Streak: ${gamification.streak_days} days, Total Study Time: ${gamification.total_study_minutes} mins.\n`;
+    }
+
+    if (studyHistory && studyHistory.length > 0) {
+      contextStr += `• Recent Study History:\n` +
+        studyHistory.map((s) => `  - ${s.subject || 'Học tập'} (${s.study_type || 'session'}): ${s.correct_count ? s.correct_count + ' câu đúng' : ''} lúc ${s.started_at ? s.started_at.slice(0, 10) : ''}`).join('\n') + '\n';
+    }
+
+    if (studyProgress) {
+      contextStr += `• Study Progress: ${studyProgress.totalSessions ?? 0} sessions completed, ~${studyProgress.totalMinutes ?? 0} mins studied.\n`;
+    }
+    contextStr += `--------------------------------------------\n`;
+  }
+
+  return `You are a multilingual AI assistant. You understand Vietnamese, English, and mixed Vietnamese-English naturally. Respond in the language the user is using unless they explicitly request another language. Vietnamese is fully supported; never ask the user to translate. When explaining technical terms in Vietnamese, include the English term in parentheses when useful.
+
+You are Study Coach AI, the central and primary AI orchestrator of Life OS.
+Role: Analyze • Plan • Improve.
+You act as a personal learning advisor and coordinator across the entire Life OS system (Weakness Map, Smart Calendar, Study Library, Study Progress, Gamification).
+
+Key Objectives & Behavior:
+1. Analyze the student's current learning state using their real data if provided in context above.
+2. Identify weak topics and suggest focused review sessions (recommended 30-45 minutes).
+3. Recommend concrete study schedules and propose calendar study sessions.
+4. Explain WHY you are making each recommendation (e.g., "Because your mastery in Trigonometry is at 45%...").
+5. If the student has no weak topics or no data yet, explain gracefully and welcome them to Life OS, suggesting they can start learning their favorite subject or take a quiz in Study Library. NEVER invent fake quiz scores or fake progress.
+6. When proposing a calendar session, include a clear structured suggestion like:
+[SCHEDULE_PROPOSAL: {"subject": "Toán học", "topic": "Định lý Pythagore", "durationMinutes": 45, "time": "19:30"}]
+The UI will automatically recognize this and let the student add it to Smart Calendar with one click.
+7. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.
+8. CRITICAL: Output ONLY the final response to the user. Do NOT output internal reasoning, thinking steps, checklist analysis, or draft options.${contextStr}`;
 }
 
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -121,9 +244,9 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { botType, messages } = (await req.json()) as RequestBody;
+    const { botType, messages, studentContext } = (await req.json()) as RequestBody;
 
-    if (!botType || !SYSTEM_PROMPTS[botType]) {
+    if (!botType || (!SYSTEM_PROMPTS[botType] && botType !== 'study_coach')) {
       return new Response(
         JSON.stringify({ error: "Invalid or missing botType" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -137,7 +260,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const systemPrompt = SYSTEM_PROMPTS[botType];
+    const systemPrompt = botType === 'study_coach' ? formatStudyCoachPrompt(studentContext) : SYSTEM_PROMPTS[botType];
 
     const geminiKey = Deno.env.get("GEMINI_API_KEY");
     if (!geminiKey) {
@@ -161,11 +284,10 @@ Deno.serve(async (req: Request) => {
     }
 
     let modelsToTry = [
+      "gemini-2.5-flash",
       "gemini-2.0-flash",
       "gemini-1.5-flash",
-      "gemini-1.5-flash-latest",
       "gemini-1.5-pro",
-      "gemini-2.5-flash",
     ];
 
     try {
@@ -307,7 +429,9 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    return new Response(JSON.stringify({ content }), {
+    const finalContent = cleanReasoningOutput(content);
+
+    return new Response(JSON.stringify({ content: finalContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
