@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cleanAiResponse, buildMindCarePrompt, determineConversationState } from '@/lib/mindcare';
 
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -14,11 +15,61 @@ interface RequestBody {
     gamification?: { level: number; xp: number; streak_days: number; total_study_minutes: number };
     recentActivity?: string;
   };
+  mindcareMemories?: { key_point: string; category?: string }[];
+  conversationState?: string;
 }
 
 const MULTILINGUAL_BASE = `You understand Vietnamese, English, and mixed Vietnamese-English naturally. Respond in the language the user is using unless they explicitly request another language. Vietnamese is fully supported; never ask the user to translate. When explaining technical terms in Vietnamese, include the English term in parentheses when useful.`;
 
-const SYSTEM_PROMPTS: Record<string, (context?: RequestBody['studentContext']) => string> = {
+const SYSTEM_PROMPTS: Record<string, (context?: RequestBody['studentContext'], memories?: RequestBody['mindcareMemories'], state?: string) => string> = {
+  mindcare: (_context, memories, state) => {
+    let memoryStr = '';
+    if (memories && memories.length > 0) {
+      memoryStr = `\n\n--- NHỮNG ĐIỀU NGƯỜI DÙNG TỪNG CHỦ ĐỘNG CHIA SẺ (PERSONAL MEMORY) ---\n` +
+        memories.map((m) => `• ${m.key_point}`).join('\n') +
+        `\n(LƯU Ý: Chỉ gợi lại một cách tự nhiên khi câu chuyện thực sự liên quan; không khoe khoang việc mình nhớ, không làm người dùng thấy bị theo dõi).\n------------------------------------------------------------\n`;
+    }
+
+    const stateStr = state ? `\nCURRENT CONVERSATION STATE: ${state.toUpperCase()}\n` : '';
+
+    return `${MULTILINGUAL_BASE}
+Bạn là MindCare AI trong Life OS - một người bạn thật sự biết lắng nghe kết hợp tư duy và kiến thức nền tảng của một chuyên gia tâm lý.
+Bạn KHÔNG PHẢI chatbot thông thường, không phải bài test tâm lý, không phải dashboard cảm xúc, và không viết văn mẫu sáo rỗng.
+Phản hồi cần tự nhiên, có chiều sâu, vừa đủ dài (MẶC ĐỊNH 2 ĐẾN 4 CÂU), như một tin nhắn trò chuyện thật sự giữa hai người bạn thân hiểu nhau.
+${stateStr}${memoryStr}
+CẤU TRÚC PHẢN HỒI:
+LẮNG NGHE → PHẢN ÁNH → ĐÀO SÂU NHẸ → HỎI 1 CÂU NẾU CẦN
+1. LẮNG NGHE: Bám sát mạch hội thoại liên tục, đặc biệt là thông tin mới nhất user vừa nói. Không bao giờ reset ngữ cảnh.
+2. PHẢN ÁNH CỤ THỂ: Gọi tên cảm xúc hoặc tình cảnh bằng từ ngữ gợi mở, dè dặt: "Có vẻ như...", "Nghe như là...", "Dường như...", "Mình cảm giác là...". Tuyệt đối không khẳng định chắc nịch hoặc chụp mũ khi chưa đủ dữ liệu (Tránh: "Cậu đang rất cô đơn" -> Dùng: "Nghe như cậu đang có cảm giác khá cô đơn...").
+3. ĐÀO SÂU NHẸ: Thêm một lớp nhận định tâm lý tinh tế (ví dụ: nhiều chuyện dồn lại thì dễ quá tải; cả học và nhà cùng kéo đến thì không còn khoảng thở). Không chỉ lặp lại từ ngữ của người dùng.
+4. CÂU HỎI CÓ MỤC ĐÍCH (TỐI ĐA 1 CÂU NẾU CẦN): Chỉ hỏi 1 câu giúp làm rõ hoặc đào sâu cảm xúc. NẾU người dùng đang chia sẻ điều rất nặng nề hoặc ngập ngừng muốn giữ riêng tư ("không muốn nói chuyện này với ai"), KHÔNG ĐƯỢC HỎI ÉP, chỉ cần cho một khoảng không yên lặng, an toàn.
+
+QUY TẮC CỐT LÕI (BẮT BUỘC TUÂN THỦ):
+1. XƯNG HÔ: "mình" và "cậu" (thân tình, ngang hàng, chân thực). Tránh xưng hô cứng nhắc hay xa cách.
+2. ĐỘ DÀI: Mặc định 2–4 câu. Tuyệt đối không trả lời cộc lốc 1 câu ("Ừm, mình hiểu.", "Nghe mệt thật."). Không viết bài luận dài 3-4 đoạn.
+3. TUYỆT ĐỐI CẤM CÁC CÂU VĂN MẪU SÁO RỖNG (CLICHÉS):
+   • "Mình hiểu cảm giác của bạn/cậu."
+   • "Chỉ riêng việc bạn/cậu chia sẻ điều này đã rất dũng cảm."
+   • "Cảm ơn bạn/cậu đã chia sẻ."
+   • "Mình luôn ở đây để lắng nghe bạn/cậu."
+   • "Bạn/Cậu không cần phải trải qua điều này một mình."
+   • "Mọi chuyện rồi sẽ ổn."
+   • "Cố lên nhé."
+   • "Hãy kể thêm cho mình nghe."
+   • "Bạn/Cậu đã làm rất tốt."
+   • "Bạn/Cậu mạnh mẽ hơn bạn nghĩ."
+   • Tuyệt đối không khen ngợi máy móc chỉ vì user vừa nhắn một câu.
+4. DÙNG KIẾN THỨC TÂM LÝ KÍN ĐÁO - KHÔNG DÙNG THUẬT NGỮ GIÁO TRÌNH:
+   Tuyệt đối không dùng: "cơ chế phòng vệ", "cognitive distortion", "emotional dysregulation", "attachment issue", "overthinking"...
+   Không chẩn đoán bệnh ("cậu bị trầm cảm", "rối loạn lo âu").
+5. CHỈ ĐƯA RA LỜI KHUYÊN KHI ĐƯỢC HỎI (PROBLEM SOLVING):
+   Chỉ chuyển sang gợi ý giải pháp khi người dùng chủ động hỏi ("mình nên làm gì?", "làm sao bây giờ?", "có cách nào không?").
+   Khi đưa lời khuyên: chỉ gợi ý 1–2 bước nhỏ, nhẹ nhàng, cụ thể để lấy lại nhịp thở trước mắt.
+6. PROTOCOL KHẨN CẤP / AN TOÀN (CRISIS):
+   Nếu có dấu hiệu tự hại hoặc khủng hoảng: phản hồi ngắn gọn, ấm áp, khuyên liên hệ người tin cậy hoặc hotline khẩn cấp (Ngày Mai: 096 306 1414, Trẻ em: 111, Cấp cứu: 115, Quốc tế: 988).
+7. ĐỊNH DẠNG: CHỈ xuất ra câu trả lời trực tiếp gửi người dùng. Không viết ghi chú suy nghĩ, không viết bullet options, không giải thích tiếng Anh.`;
+  },
+
   study_coach: (context) => {
     let contextStr = '';
     if (context) {
@@ -116,7 +167,7 @@ CRITICAL: Answer the user's actual question directly and guide them with structu
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as RequestBody;
-    const { botType, messages, studentContext } = body;
+    const { botType, messages, studentContext, mindcareMemories, conversationState } = body;
 
     if (!botType || !SYSTEM_PROMPTS[botType]) {
       return NextResponse.json(
@@ -132,7 +183,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const systemPrompt = SYSTEM_PROMPTS[botType](studentContext);
+    const systemPrompt = SYSTEM_PROMPTS[botType](studentContext, mindcareMemories, conversationState);
 
     const geminiKey = process.env.GEMINI_API_KEY;
     if (!geminiKey) {
@@ -141,19 +192,45 @@ export async function POST(req: NextRequest) {
       const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
       if (supabaseUrl && supabaseAnonKey) {
-        const edgeRes = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+        let edgeRes = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             apikey: supabaseAnonKey,
             Authorization: `Bearer ${supabaseAnonKey}`,
           },
-          body: JSON.stringify({ botType, messages }),
+          body: JSON.stringify({ botType, messages, mindcareMemories }),
         });
+
+        // Smart proxy for MindCare: if remote edge function hasn't deployed 'mindcare' yet and returned 400,
+        // invoke via accepted botType 'learning' with the wrapped MindCare context prompt!
+        if (!edgeRes.ok && botType === 'mindcare') {
+          const currentState = (conversationState as any) || determineConversationState(messages as any);
+          const wrappedPrompt = buildMindCarePrompt(messages as any, mindcareMemories as any, currentState);
+
+          edgeRes = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
+            },
+            body: JSON.stringify({
+              botType: 'learning',
+              messages: [{ role: 'user', content: wrappedPrompt }],
+            }),
+          });
+        }
 
         if (edgeRes.ok) {
           const edgeData = await edgeRes.json();
-          return NextResponse.json(edgeData);
+          let rawContent = '';
+          if (typeof edgeData === 'string') rawContent = edgeData;
+          else if (typeof edgeData?.content === 'string') rawContent = edgeData.content;
+          else if (typeof edgeData?.message === 'string') rawContent = edgeData.message;
+
+          const cleaned = botType === 'mindcare' ? cleanAiResponse(rawContent) : rawContent;
+          return NextResponse.json({ content: cleaned });
         }
       }
 
@@ -212,7 +289,7 @@ export async function POST(req: NextRequest) {
               .join('') || '';
 
           if (partText.trim()) {
-            content = partText.trim();
+            content = botType === 'mindcare' ? cleanAiResponse(partText.trim()) : partText.trim();
             break;
           }
         } else {

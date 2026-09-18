@@ -20,6 +20,7 @@ import {
   Shield,
   MessageSquare,
   FileCheck,
+  Brain,
 } from 'lucide-react';
 import { useAuth } from '@/components/auth-provider';
 import { useLanguage } from '@/components/language-provider';
@@ -44,7 +45,8 @@ const navItems: NavItem[] = [
   { href: '/app/study', label: 'Study', labelVi: 'Học tập', icon: BookOpen },
   { href: '/app/calendar', label: 'Calendar', labelVi: 'Lịch', icon: Calendar },
   { href: '/app/community', label: 'Community', labelVi: 'Cộng đồng', icon: Users },
-  { href: '/app/ai', label: 'AI', labelVi: 'Trí tuệ nhân tạo', icon: Bot },
+  { href: '/app/ai', label: 'AI Center', labelVi: 'Trung tâm AI', icon: Bot },
+  { href: '/app/mindcare', label: 'MindCare', labelVi: 'MindCare', icon: Brain },
   { href: '/app/my-life', label: 'My Life', labelVi: 'Cuộc sống', icon: Heart },
   { href: '/app/profile', label: 'Profile', labelVi: 'Hồ sơ', icon: User },
   { href: '/app/settings', label: 'Settings', labelVi: 'Cài đặt', icon: Settings },
@@ -327,6 +329,9 @@ function SidebarContent({
     }
     if (href === '/app/ai') {
       return pathname.startsWith('/app/ai') || pathname.startsWith('/app/study-coach');
+    }
+    if (href === '/app/mindcare') {
+      return pathname.startsWith('/app/mindcare');
     }
     if (href === '/app/my-life') {
       return pathname.startsWith('/app/my-life');
