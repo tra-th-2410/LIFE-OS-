@@ -99,6 +99,7 @@ export default function AppHomePage() {
     try {
       const startDate7DaysAgo = past7Days[0]?.dateStr ?? todayStr;
 
+      // --- PHASE 1: Critical UI Data (Immediately unblocks initial render) ---
       const [
         gameRes,
         tasksRes,
@@ -108,13 +109,6 @@ export default function AppHomePage() {
         hLogsRes,
         moodRes,
         journalRes,
-        allTasksCountRes,
-        allSessionsCountRes,
-        allChallengesCountRes,
-        allHabitsCountRes,
-        allJournalsCountRes,
-        allMoodsCountRes,
-        goalsRes,
       ] = await Promise.all([
         // 1. Gamification
         supabase.from('user_gamification').select('*').eq('user_id', user.id).maybeSingle(),
@@ -154,27 +148,6 @@ export default function AppHomePage() {
           .eq('user_id', user.id)
           .gte('created_at', `${todayStr}T00:00:00Z`)
           .limit(1),
-
-        // 9. All lifetime tasks
-        supabase.from('smart_calendar_events').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-
-        // 10. All lifetime study sessions
-        supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-
-        // 11. All lifetime challenge participants
-        supabase.from('challenge_participants').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-
-        // 12. All lifetime habits
-        supabase.from('habits').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-
-        // 13. All lifetime journal entries
-        supabase.from('journal_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-
-        // 14. All lifetime mood entries
-        supabase.from('mood_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
-
-        // 15. Goals count
-        supabase.from('goals').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       ]);
 
       setGamification((gameRes.data as UserGamification) ?? null);
@@ -188,21 +161,37 @@ export default function AppHomePage() {
       setTodayHabitLogs((hLogsRes.data as HabitLog[]) ?? []);
       setLatestMood(((moodRes.data as MoodEntry[]) ?? [])[0] ?? null);
       setHasJournalToday((journalRes.data?.length ?? 0) > 0);
-      setGoalsCount(goalsRes.count ?? 0);
 
-      const totalActivities =
-        (allTasksCountRes.count ?? 0) +
-        (allSessionsCountRes.count ?? 0) +
-        (allChallengesCountRes.count ?? 0) +
-        (allHabitsCountRes.count ?? 0) +
-        (allJournalsCountRes.count ?? 0) +
-        (allMoodsCountRes.count ?? 0) +
-        (goalsRes.count ?? 0);
+      // Unblock UI immediately after critical data is set
+      setLoading(false);
 
-      setLifetimeActivitiesCount(totalActivities);
+      // --- PHASE 2: Non-Critical Counts (Background fetch, does NOT block UI) ---
+      Promise.all([
+        supabase.from('smart_calendar_events').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('study_sessions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('challenge_participants').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('habits').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('journal_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('mood_entries').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('goals').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      ])
+        .then(([allTasks, allSessions, allChallenges, allHabits, allJournals, allMoods, allGoals]) => {
+          setGoalsCount(allGoals.count ?? 0);
+          const totalActivities =
+            (allTasks.count ?? 0) +
+            (allSessions.count ?? 0) +
+            (allChallenges.count ?? 0) +
+            (allHabits.count ?? 0) +
+            (allJournals.count ?? 0) +
+            (allMoods.count ?? 0) +
+            (allGoals.count ?? 0);
+          setLifetimeActivitiesCount(totalActivities);
+        })
+        .catch((err) => {
+          console.warn('Background activity count load error:', err);
+        });
     } catch (err) {
       console.error('Error loading Life OS Home data:', err);
-    } finally {
       setLoading(false);
     }
   }, [user, todayStr, past7Days]);
@@ -216,8 +205,15 @@ export default function AppHomePage() {
     const xp = gamification?.xp ?? 0;
     const streak = gamification?.streak_days ?? 0;
 
-    // Meaningful activity check from database
-    const hasMeaningfulActivity = xp > 0 || streak > 0 || lifetimeActivitiesCount > 0;
+    // Meaningful activity check from database (both active records & lifetime counts)
+    const hasMeaningfulActivity =
+      xp > 0 ||
+      streak > 0 ||
+      lifetimeActivitiesCount > 0 ||
+      todayTasks.length > 0 ||
+      sevenDaysSessions.length > 0 ||
+      habits.length > 0 ||
+      activeChallenge !== null;
 
     // Profile completeness check
     const hasProfileName = Boolean(profile?.full_name?.trim() || profile?.display_name?.trim());
@@ -235,13 +231,13 @@ export default function AppHomePage() {
     }
 
     // If profile is incomplete and activity is completely 0, they are a NEW USER
-    if (!isProfileSetupComplete && lifetimeActivitiesCount === 0 && xp === 0) {
+    if (!isProfileSetupComplete && lifetimeActivitiesCount === 0 && xp === 0 && todayTasks.length === 0) {
       return true;
     }
 
     // Case 2 & 3: User has meaningful activity (tasks, study sessions, challenges, habits, journals, etc.) -> ACTIVE USER
     return false;
-  }, [gamification, lifetimeActivitiesCount, profile]);
+  }, [gamification, lifetimeActivitiesCount, profile, todayTasks, sevenDaysSessions, habits, activeChallenge]);
 
   // Toggle task status
   const handleToggleTask = async (task: SmartCalendarEvent) => {

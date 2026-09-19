@@ -37,15 +37,50 @@ import {
   Clock,
   Target,
 } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import type { Challenge, ChallengeParticipant, ChallengeCheckin, ChallengeCategory, StudySet, QuestionType } from '@/lib/types';
 import { fetchStudySets, createStudySet, updateStudySet, deleteStudySet, createStudyQuestionsBatch, STUDY_SUBJECTS } from '@/lib/study';
 import { StudySetCard } from '@/components/study/study-set-card';
-import { SetDialog } from '@/components/study/set-dialog';
-import { AiCreateSetDialog } from '@/components/study/ai-create-set-dialog';
-import { StudyProgressView } from '@/components/study/study-progress-view';
-import { StudyLibraryView } from '@/components/study/study-library-view';
-import { FocusModeDialog } from '@/components/study/focus-mode-dialog';
 import { toast } from 'sonner';
+
+const SetDialog = dynamic(
+  () => import('@/components/study/set-dialog').then((mod) => mod.SetDialog),
+  { ssr: false }
+);
+
+const AiCreateSetDialog = dynamic(
+  () => import('@/components/study/ai-create-set-dialog').then((mod) => mod.AiCreateSetDialog),
+  { ssr: false }
+);
+
+const FocusModeDialog = dynamic(
+  () => import('@/components/study/focus-mode-dialog').then((mod) => mod.FocusModeDialog),
+  { ssr: false }
+);
+
+const StudyProgressView = dynamic(
+  () => import('@/components/study/study-progress-view').then((mod) => mod.StudyProgressView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    ),
+  }
+);
+
+const StudyLibraryView = dynamic(
+  () => import('@/components/study/study-library-view').then((mod) => mod.StudyLibraryView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+      </div>
+    ),
+  }
+);
 
 function StudyTabSync({ onTabChange }: { onTabChange: (tab: 'quiz' | 'library' | 'progress' | 'challenges') => void }) {
   const searchParams = useSearchParams();
@@ -160,21 +195,21 @@ export default function StudyPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Load challenges
-      const { data: chData } = await supabase.from('challenges').select('*').order('created_at', { ascending: false });
-      const chList = (chData as Challenge[]) ?? [];
-      setChallenges(chList);
+      // 1. Concurrently load challenges, study sets, and challenge participations
+      const [chRes, sets, partRes] = await Promise.all([
+        supabase.from('challenges').select('*').order('created_at', { ascending: false }),
+        fetchStudySets(user?.id),
+        user
+          ? supabase.from('challenge_participants').select('*').eq('user_id', user.id)
+          : Promise.resolve({ data: [] }),
+      ]);
 
-      // 2. Load study sets (both user sets and system seed sets)
-      const sets = await fetchStudySets(user?.id);
+      const chList = (chRes.data as Challenge[]) ?? [];
+      setChallenges(chList);
       setStudySets(sets);
 
       if (user) {
-        // Load challenge participations
-        const { data: partData } = await supabase
-          .from('challenge_participants')
-          .select('*')
-          .eq('user_id', user.id);
+        const partData = partRes.data;
         const partMap = new Map<string, ChallengeParticipant>();
         let hasActiveParticipation = false;
         (partData as ChallengeParticipant[])?.forEach((p) => {
@@ -954,25 +989,31 @@ export default function StudyPage() {
       {mainSection === 'progress' && <StudyProgressView />}
 
       {/* Manual Set Create/Edit Dialog */}
-      <SetDialog
-        open={isCreateSetOpen}
-        onOpenChange={setIsCreateSetOpen}
-        studySet={editingSet}
-        onSave={handleSaveSet}
-      />
+      {isCreateSetOpen && (
+        <SetDialog
+          open={isCreateSetOpen}
+          onOpenChange={setIsCreateSetOpen}
+          studySet={editingSet}
+          onSave={handleSaveSet}
+        />
+      )}
 
       {/* AI Set Create Dialog */}
-      <AiCreateSetDialog
-        open={isAiCreateSetOpen}
-        onOpenChange={setIsAiCreateSetOpen}
-        onSuccess={handleAiSetSuccess}
-      />
+      {isAiCreateSetOpen && (
+        <AiCreateSetDialog
+          open={isAiCreateSetOpen}
+          onOpenChange={setIsAiCreateSetOpen}
+          onSuccess={handleAiSetSuccess}
+        />
+      )}
 
       {/* Focus Mode Dialog */}
-      <FocusModeDialog
-        open={showFocusMode}
-        onOpenChange={setShowFocusMode}
-      />
+      {showFocusMode && (
+        <FocusModeDialog
+          open={showFocusMode}
+          onOpenChange={setShowFocusMode}
+        />
+      )}
     </div>
   );
 }

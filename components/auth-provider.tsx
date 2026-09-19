@@ -45,46 +45,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resolvedRef = useRef(false);
 
   const loadProfile = useCallback(async (uid: string, currentUser?: User | null) => {
-    let { data: p } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', uid)
-      .maybeSingle();
-
-    if (!p && currentUser) {
-      const meta = currentUser.user_metadata || {};
-      const generatedUsername =
-        meta.user_name ||
-        (currentUser.email ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') : `user_${uid.slice(0, 6)}`);
-      const displayName = meta.full_name || meta.name || generatedUsername;
-
-      const { data: newProfile } = await supabase
+    const profilePromise = (async () => {
+      let { data: p } = await supabase
         .from('profiles')
-        .upsert(
-          {
-            id: uid,
-            username: generatedUsername,
-            display_name: displayName,
-            full_name: displayName,
-            avatar_url: meta.avatar_url || meta.picture || null,
-            verification_status: 'basic',
-          },
-          { onConflict: 'id' }
-        )
-        .select()
+        .select('*')
+        .eq('id', uid)
         .maybeSingle();
 
-      p = newProfile;
-    }
+      if (!p && currentUser) {
+        const meta = currentUser.user_metadata || {};
+        const generatedUsername =
+          meta.user_name ||
+          (currentUser.email ? currentUser.email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') : `user_${uid.slice(0, 6)}`);
+        const displayName = meta.full_name || meta.name || generatedUsername;
+
+        const { data: newProfile } = await supabase
+          .from('profiles')
+          .upsert(
+            {
+              id: uid,
+              username: generatedUsername,
+              display_name: displayName,
+              full_name: displayName,
+              avatar_url: meta.avatar_url || meta.picture || null,
+              verification_status: 'basic',
+            },
+            { onConflict: 'id' }
+          )
+          .select()
+          .maybeSingle();
+
+        p = newProfile;
+      }
+      return p;
+    })();
+
+    const rolePromise = (async (): Promise<UserRole> => {
+      try {
+        const { data: r } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', uid)
+          .maybeSingle();
+        return (r?.role as UserRole) ?? 'user';
+      } catch {
+        return 'user';
+      }
+    })();
+
+    const [p, userRole] = await Promise.all([profilePromise, rolePromise]);
 
     setProfile(p as Profile | null);
-
-    const { data: r } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', uid)
-      .maybeSingle();
-    setRole((r?.role as UserRole) ?? 'user');
+    setRole(userRole);
   }, []);
 
   useEffect(() => {
