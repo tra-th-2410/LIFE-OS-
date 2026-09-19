@@ -169,7 +169,7 @@ export async function generateAiResponse(
   // Strategy 1: Call internal Next.js API Route (/api/ai/chat)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
+    const timeoutId = setTimeout(() => controller.abort(), 7000);
 
     const localRes = await fetch('/api/ai/chat', {
       method: 'POST',

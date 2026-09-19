@@ -96,7 +96,7 @@ export default function StudyCoachPage() {
           .limit(5),
         supabase
           .from('study_sessions')
-          .select('study_type, duration_seconds, correct_count, started_at')
+          .select('mode, duration_seconds, correct_answers, started_at')
           .eq('user_id', user.id)
           .order('started_at', { ascending: false })
           .limit(5),
@@ -107,10 +107,18 @@ export default function StudyCoachPage() {
       const evsData = evsRes.status === 'fulfilled' ? ((evsRes.value?.data as SmartCalendarEvent[]) || []) : [];
       const sessData = sessRes.status === 'fulfilled' ? ((sessRes.value?.data as any[]) || []) : [];
 
+      const mappedHistory = sessData.map((s) => ({
+        subject: 'Học tập',
+        study_type: s.mode || 'practice',
+        duration_seconds: s.duration_seconds || 0,
+        correct_count: s.correct_answers || 0,
+        started_at: s.started_at,
+      }));
+
       setWeaknessTopics(weakList);
       setGamification(gameData ?? null);
       setUpcomingEvents(evsData);
-      setStudyHistory(sessData);
+      setStudyHistory(mappedHistory);
 
       const totalSess = sessData.length;
       const totalMins = Math.round(sessData.reduce((acc, s) => acc + (s.duration_seconds || 0), 0) / 60);
@@ -194,14 +202,17 @@ export default function StudyCoachPage() {
     setIsAiTyping(true);
 
     try {
-      // Build student context payload with all 5 Life OS pillars
+      // Optimize & compact student context payload with all 5 Life OS pillars
+      const filteredWeak = weaknessTopics.filter((w) => w.mastery_score < 70).slice(0, 5);
+      const effectiveWeakness = filteredWeak.length > 0 ? filteredWeak : weaknessTopics.slice(0, 2);
+
       const studentContext = {
-        weaknessTopics: weaknessTopics.map((w) => ({
+        weaknessTopics: effectiveWeakness.map((w) => ({
           subject: w.subject,
           topic: w.topic,
           mastery_score: w.mastery_score,
         })),
-        upcomingEvents: upcomingEvents.map((e) => ({
+        upcomingEvents: upcomingEvents.slice(0, 3).map((e) => ({
           title: e.title,
           date: e.date,
           start_time: e.start_time,
@@ -214,7 +225,7 @@ export default function StudyCoachPage() {
               total_study_minutes: gamification.total_study_minutes,
             }
           : undefined,
-        studyHistory: studyHistory.map((s) => ({
+        studyHistory: studyHistory.slice(0, 3).map((s) => ({
           subject: s.subject,
           study_type: s.study_type,
           duration_seconds: s.duration_seconds,
@@ -227,11 +238,14 @@ export default function StudyCoachPage() {
       const session = await supabase.auth.getSession();
       const accessToken = session.data.session?.access_token;
 
-      // Call Unified AI Pipeline
-      const historyPayload = messages.concat(userMsg).map((m) => ({
-        role: m.role,
-        content: m.content,
-      }));
+      // Call Unified AI Pipeline with recent conversation context (last 6 messages)
+      const historyPayload = messages
+        .concat(userMsg)
+        .slice(-6)
+        .map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
 
       const rawAiResponse = await generateAiResponse(
         'study_coach',

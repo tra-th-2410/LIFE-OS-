@@ -133,11 +133,13 @@ Key Objectives & Behavior:
 3. Recommend concrete study schedules and propose calendar study sessions.
 4. Explain WHY you are making each recommendation (e.g., "Because your mastery in Trigonometry is at 45%...").
 5. If the student has no weak topics or no data yet, explain gracefully and welcome them to Life OS, suggesting they can start learning their favorite subject or take a quiz in Study Library. NEVER invent fake quiz scores or fake progress.
-6. When proposing a calendar session, include a clear structured suggestion like:
+6. When proposing a calendar session or when the user asks about planning/studying, include a clear structured suggestion like:
 [SCHEDULE_PROPOSAL: {"subject": "Toán học", "topic": "Định lý Pythagore", "durationMinutes": 45, "time": "19:30"}]
 The UI will automatically recognize this and let the student add it to Smart Calendar with one click.
-7. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.
-8. CRITICAL: Output ONLY the final response to the user. Do NOT output internal reasoning, thinking steps, checklist analysis, or draft options.${contextStr}`;
+7. GREETINGS & SHORT QUERIES: If the user sends a simple greeting (e.g. "hi", "hello", "chào bạn"), respond warmly and concisely (under 100 words), welcome them back, summarize their key priority in 1 sentence, and ask how you can help. Do NOT write lengthy analysis for simple greetings.
+8. LEARNING & PLANNING QUERIES: When the student asks about what to study, weaknesses, schedules, or progress, analyze their context thoroughly and provide actionable guidance with a schedule proposal.
+9. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.
+10. CRITICAL: Output ONLY the final response to the user. Do NOT output internal reasoning, thinking steps, checklist analysis, or draft options.${contextStr}`;
 }
 
 const SYSTEM_PROMPTS: Record<string, string> = {
@@ -283,32 +285,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    let modelsToTry = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-      "gemini-1.5-pro",
+    const modelsToTry = [
+      "gemini-flash-lite-latest",
+      "gemini-flash-latest",
+      "gemini-3.8-flash",
+      "gemini-pro-latest",
     ];
-
-    try {
-      const listModelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
-      if (listModelsRes.ok) {
-        const listData = await listModelsRes.json();
-        const available = (listData?.models || [])
-          .filter((m: { supportedGenerationMethods?: string[] }) =>
-            m.supportedGenerationMethods?.includes("generateContent")
-          )
-          .map((m: { name: string }) => m.name.replace(/^models\//, ""));
-        if (available.length > 0) {
-          console.log("Dynamically discovered available Gemini models:", available);
-          modelsToTry = [...available, ...modelsToTry];
-        }
-      } else {
-        console.warn("Could not list models:", listModelsRes.status, await listModelsRes.text());
-      }
-    } catch (e) {
-      console.error("List models error:", e);
-    }
 
     let content = "";
     let lastErrorText = "";
@@ -334,19 +316,25 @@ Deno.serve(async (req: Request) => {
 
     const generationConfig: Record<string, unknown> = {
       temperature: 0.7,
-      maxOutputTokens: 8192,
+      maxOutputTokens: isJsonRequest ? 2048 : 1024,
     };
     if (isJsonRequest) {
       generationConfig.responseMimeType = "application/json";
     }
 
+    const attempts: { model: string; status: number; ms: number; ok: boolean }[] = [];
+
     // Strategy 1: Native Gemini API
     for (const model of modelsToTry) {
+      const modelStart = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       try {
         const nativeUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
         const nativeRes = await fetch(nativeUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
           body: JSON.stringify({
             contents,
             systemInstruction: {
@@ -355,7 +343,9 @@ Deno.serve(async (req: Request) => {
             generationConfig,
           }),
         });
+        clearTimeout(timeoutId);
 
+        const modelDuration = Date.now() - modelStart;
         if (nativeRes.ok) {
           const nativeData = await nativeRes.json();
           const partText = nativeData?.candidates?.[0]?.content?.parts
@@ -363,22 +353,32 @@ Deno.serve(async (req: Request) => {
             .join("") || "";
           if (partText.trim()) {
             content = partText.trim();
-            console.log(`Successfully generated content using model: ${model}`);
+            attempts.push({ model, status: 200, ms: modelDuration, ok: true });
+            console.log(`Successfully generated content using model: ${model} in ${modelDuration}ms`);
             break;
           }
         } else {
           lastStatus = nativeRes.status;
           lastErrorText = await nativeRes.text();
+          attempts.push({ strategy: "native", model, status: lastStatus, ms: modelDuration, ok: false, err: lastErrorText.slice(0, 150) });
           console.warn(`Native Gemini (${model}) failed with ${lastStatus}: ${lastErrorText}`);
+          if (lastStatus === 401 || lastStatus === 403 || lastStatus === 429) {
+            break; // Terminal auth or quota issue, fail fast
+          }
         }
-      } catch (nativeErr) {
-        console.error(`Native fetch error with model ${model}:`, nativeErr);
+      } catch (nativeErr: any) {
+        clearTimeout(timeoutId);
+        const modelDuration = Date.now() - modelStart;
+        const errMsg = nativeErr?.name === 'AbortError' ? 'Timeout (5s exceeded)' : String(nativeErr?.message || nativeErr);
+        attempts.push({ model, status: 0, ms: modelDuration, ok: false, err: errMsg });
+        console.error(`Native fetch error with model ${model}:`, errMsg);
       }
     }
 
     // Strategy 2: OpenAI Compatible Endpoint fallback if Strategy 1 didn't produce content
-    if (!content) {
+    if (!content && lastStatus !== 401 && lastStatus !== 403 && lastStatus !== 429) {
       for (const model of modelsToTry) {
+        const oaiStart = Date.now();
         try {
           const openAiRes = await fetch(
             "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
@@ -391,23 +391,31 @@ Deno.serve(async (req: Request) => {
               body: JSON.stringify({
                 model,
                 messages: chatMessages,
-                max_tokens: 8192,
+                max_tokens: isJsonRequest ? 2048 : 1024,
                 temperature: 0.7,
               }),
             }
           );
 
+          const oaiMs = Date.now() - oaiStart;
           if (openAiRes.ok) {
             const data = await openAiRes.json();
             if (typeof data?.choices?.[0]?.message?.content === "string") {
               content = data.choices[0].message.content.trim();
+              attempts.push({ strategy: "openai", model, status: 200, ms: oaiMs, ok: true });
               break;
             }
           } else {
             lastStatus = openAiRes.status;
             lastErrorText = await openAiRes.text();
+            attempts.push({ strategy: "openai", model, status: lastStatus, ms: oaiMs, ok: false, err: lastErrorText.slice(0, 150) });
+            if (lastStatus === 401 || lastStatus === 403 || lastStatus === 429) {
+              break;
+            }
           }
-        } catch (openAiErr) {
+        } catch (openAiErr: any) {
+          const oaiMs = Date.now() - oaiStart;
+          attempts.push({ strategy: "openai", model, status: 0, ms: oaiMs, ok: false, err: String(openAiErr?.message || openAiErr) });
           console.error(`OpenAI compatibility fetch error with model ${model}:`, openAiErr);
         }
       }

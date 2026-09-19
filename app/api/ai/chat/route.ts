@@ -179,11 +179,13 @@ Key Objectives & Behavior:
 3. Recommend concrete study schedules and propose calendar study sessions.
 4. Explain WHY you are making each recommendation (e.g., "Because your mastery in Trigonometry is at 45%...").
 5. If the student has no weak topics or no data yet, explain gracefully and welcome them to Life OS, suggesting they can start learning their favorite subject or take a quiz in Study Library. NEVER invent fake quiz scores or fake progress.
-6. When proposing a calendar session, include a clear structured suggestion like:
+6. When proposing a calendar session or when the user asks about planning/studying, include a clear structured suggestion like:
 [SCHEDULE_PROPOSAL: {"subject": "Toán học", "topic": "Định lý Pythagore", "durationMinutes": 45, "time": "19:30"}]
 The UI will automatically recognize this and let the student add it to Smart Calendar with one click.
-7. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.
-8. CRITICAL: Output ONLY the final response to the student. Do NOT output internal reasoning, thinking steps, checklist analysis, or draft options.${contextStr}`;
+7. GREETINGS & SHORT QUERIES: If the user sends a simple greeting (e.g. "hi", "hello", "chào bạn"), respond warmly and concisely (under 100 words), welcome them back, summarize their key priority in 1 sentence, and ask how you can help. Do NOT write lengthy analysis for simple greetings.
+8. LEARNING & PLANNING QUERIES: When the student asks about what to study, weaknesses, schedules, or progress, analyze their context thoroughly and provide actionable guidance with a schedule proposal.
+9. CRITICAL: Never claim you modified the database yourself. Always guide the user to confirm actions. Answer the student's actual question directly with empathy, structure, and actionable steps.
+10. CRITICAL: Output ONLY the final response to the student. Do NOT output internal reasoning, thinking steps, checklist analysis, or draft options.${contextStr}`;
   },
 
   learning: () => `${MULTILINGUAL_BASE}
@@ -353,10 +355,10 @@ export async function POST(req: NextRequest) {
     }
 
     const modelsToTry = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
+      'gemini-flash-lite-latest',
+      'gemini-flash-latest',
+      'gemini-3.8-flash',
+      'gemini-pro-latest',
     ];
 
     let content = '';
@@ -365,7 +367,7 @@ export async function POST(req: NextRequest) {
     for (const model of modelsToTry) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 20000);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
         const nativeUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
         const nativeRes = await fetch(nativeUrl, {
@@ -379,7 +381,7 @@ export async function POST(req: NextRequest) {
             },
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 4096,
+              maxOutputTokens: 1024,
             },
           }),
         });
@@ -405,9 +407,12 @@ export async function POST(req: NextRequest) {
           }
         } else {
           lastError = await nativeRes.text();
+          if (nativeRes.status === 401 || nativeRes.status === 403 || nativeRes.status === 429) {
+            break;
+          }
         }
-      } catch (err) {
-        lastError = String(err);
+      } catch (err: any) {
+        lastError = String(err?.message || err);
       }
     }
 
